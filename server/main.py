@@ -501,13 +501,14 @@ def push_hook(payload: dict[str, Any], x_hook_secret: str | None = Header(defaul
     if table == "knocks" and payload.get("type") == "INSERT":
         recipient_id = record.get("to_user")
         sender = profile(record.get("from_user", ""))
-        title, body, data = "Knock knock", f"{sender.get('name') or 'Someone'} knocked on your window", {"type": "knock", "id": record.get("id")}
+        source = f" in {sender.get('home_city')}" if record.get("source") == "window" and sender.get("home_city") else ""
+        title, body, data = f"{sender.get('name') or 'Someone'} knocked", f"Knock knock, on the window{source}", {"type": "knock", "id": record.get("id")}
     elif table == "window_translations" and record.get("status") == "ready" and old.get("status") != "ready":
         recipient_id = record.get("recipient_id")
         window = one("windows", id=record.get("window_id"))
         sender = profile(window["sender_id"]) if window else {}
-        title = f"{sender.get('name') or 'Your partner'}'s window arrived"
-        body = f"A new window from {sender.get('home_city') or 'your partner'}"
+        title = f"{sender.get('name') or 'Your pen pal'} sent you a window" + (f" from {sender['home_city']}" if sender.get("home_city") else "")
+        body = "Tap to open it"
         data = {"type": "window", "id": record.get("window_id")}
     else:
         return {"ok": True}

@@ -3,9 +3,11 @@ import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { TabBar } from '@/components/TabBar';
 import { registerPushToken } from '@/lib/data';
+import { useNotificationTaps } from '@/lib/notifications';
 import { colors } from '@/lib/theme';
 
 export default function TabsLayout() {
+  useNotificationTaps();
   useEffect(() => {
     // Ask for notification permission once the user reaches the main app (knocks + new windows)
     registerPushToken().catch(() => {});
