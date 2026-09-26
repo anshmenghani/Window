@@ -83,15 +83,32 @@ export default function Capture() {
     if (!res.canceled && res.assets[0]) setPhoto(res.assets[0].uri);
   };
 
+  // true while a finger is held on the record key (it can slide around; only lifting it stops)
+  const holding = useRef(false);
+  const [held, setHeld] = useState(false);
+
   const startRecording = async () => {
     const perm = await AudioModule.requestRecordingPermissionsAsync();
-    if (!perm.granted) return;
+    if (!perm.granted || !holding.current) return;
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
     setLevels([]);
     setAudioUri(null);
     await recorder.prepareToRecordAsync();
     recorder.record();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // let go while the recorder was still warming up: stop right away
+    if (!holding.current) stopRecording();
+  };
+
+  const press = () => {
+    holding.current = true;
+    setHeld(true);
+    startRecording();
+  };
+  const release = () => {
+    holding.current = false;
+    setHeld(false);
+    stopRecording();
   };
 
   const stopRecording = async () => {
@@ -139,7 +156,7 @@ export default function Capture() {
   const mmss = (ms: number) => `0:${String(Math.floor(ms / 1000)).padStart(2, '0')}`;
 
   return (
-    <Screen dark scroll gap={14}>
+    <Screen dark scroll scrollEnabled={!held} gap={14}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <IconButton dark label="Close" onPress={close}>
           <CloseIcon color={colors.postcard} />
@@ -199,10 +216,20 @@ export default function Capture() {
       ) : null}
 
       {!photo ? (
-        <Pressable onPress={pickPhoto} style={{ flexDirection: 'row', alignSelf: 'center', alignItems: 'center', gap: 8, padding: 4 }}>
-          <PhotosIcon size={18} color={colors.nightMuted} />
-          <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.nightMuted }}>choose from library</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 22 }}>
+          <Pressable
+            accessibilityLabel={facing === 'back' ? 'Switch to selfie camera' : 'Switch to back camera'}
+            onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 4 }}
+          >
+            <FlipIcon size={18} color={colors.nightMuted} />
+            <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.nightMuted }}>{facing === 'back' ? 'selfie' : 'back camera'}</Text>
+          </Pressable>
+          <Pressable onPress={pickPhoto} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 4 }}>
+            <PhotosIcon size={18} color={colors.nightMuted} />
+            <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.nightMuted }}>choose from library</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {/* the caption, handwritten on a cream note strip */}
@@ -240,10 +267,16 @@ export default function Capture() {
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
         {/* an old dictaphone key: hold to talk */}
-        <Pressable
+        <View
+          accessible
+          accessibilityRole="button"
           accessibilityLabel="Hold to record a voice note"
-          onPressIn={startRecording}
-          onPressOut={stopRecording}
+          onStartShouldSetResponder={() => true}
+          onResponderGrant={press}
+          onResponderRelease={release}
+          onResponderTerminationRequest={() => false}
+          onResponderTerminate={release}
+          hitSlop={12}
           style={{ alignItems: 'center', gap: 4 }}
         >
           <View style={{ width: 64, height: 64, borderRadius: 14, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: rec.isRecording ? colors.amber : colors.nightLine }}>
@@ -251,7 +284,7 @@ export default function Capture() {
             <MicIcon color={rec.isRecording ? colors.amber : colors.nightSoft} />
           </View>
           <Text style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.2, color: colors.nightMuted }}>HOLD</Text>
-        </Pressable>
+        </View>
         {!photo ? (
           <Pressable
             accessibilityLabel="Take photo"

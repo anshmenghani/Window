@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { Arch } from '@/components/Arch';
-import { WordSticker } from '@/components/WordSticker';
+import { layoutStickers, WordSticker } from '@/components/WordSticker';
 import { VoicePlayer } from '@/components/VoicePlayer';
 import { PaperGrain } from '@/components/materials';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -86,8 +86,8 @@ export default function OpenedWindow() {
         <Arch width={archW} height={archH} border={10} bottomRadius={6} glass>
           <Image source={{ uri: w.photo_url }} style={{ flex: 1 }} contentFit="cover" transition={250} />
           {/* the word labels are pinned up once the envelope is open */}
-          {!showEnvelope ? w.stickers.map((s, i) => (
-            <WordSticker key={`${s.word}-${i}`} sticker={s} index={i} lang={w.src_lang} boxW={archW - 20} boxH={archH - 20} />
+          {!showEnvelope ? layoutStickers(w.stickers, archW - 20, archH - 20).map((place, i) => (
+            <WordSticker key={`${w.stickers[i].word}-${i}`} sticker={w.stickers[i]} index={i} lang={w.src_lang} boxW={archW - 20} boxH={archH - 20} place={place} />
           )) : null}
         </Arch>
         {showEnvelope ? (

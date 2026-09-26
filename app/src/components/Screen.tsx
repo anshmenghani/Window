@@ -9,6 +9,8 @@ import { PaperGrain } from './materials';
 type Props = {
   children: ReactNode;
   scroll?: boolean;
+  /** turn scrolling off for a moment, e.g. while a finger is held on a record button */
+  scrollEnabled?: boolean;
   dark?: boolean;
   bg?: string;
   padBottom?: number; // extra bottom space (e.g. for the floating tab bar)
@@ -20,7 +22,7 @@ type Props = {
   textured?: boolean;
 };
 
-export function Screen({ children, scroll, dark, bg, padBottom = 0, gap = 18, style, refreshControl, edges = ['top', 'bottom'], textured }: Props) {
+export function Screen({ children, scroll, scrollEnabled = true, dark, bg, padBottom = 0, gap = 18, style, refreshControl, edges = ['top', 'bottom'], textured }: Props) {
   const background = bg ?? (dark ? colors.night : colors.mist);
   const inner: StyleProp<ViewStyle> = [{ paddingHorizontal: gutter, paddingTop: 12, paddingBottom: 16 + padBottom, gap }, style];
   return (
@@ -34,6 +36,7 @@ export function Screen({ children, scroll, dark, bg, padBottom = 0, gap = 18, st
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             refreshControl={refreshControl}
+            scrollEnabled={scrollEnabled}
           >
             {children}
           </ScrollView>
