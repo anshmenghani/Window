@@ -97,7 +97,18 @@ def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
 
     _, partner, city, shared, mutual = max(scored, key=lambda item: item[0])
     reason = ai.fit_reason(me, partner, shared[:3], mutual)
-    inserted = sb.table("matches").insert({"user_a": _user, "user_b": partner["id"], "city": city, "reason": reason, "status": "active"}).execute().data[0]
+    try:
+        inserted = sb.table("matches").insert({"user_a": _user, "user_b": partner["id"], "city": city, "reason": reason, "status": "active"}).execute().data[0]
+    except Exception:
+        # The database serialises concurrent match creation. If another request
+        # won the race for this user, return that match instead of surfacing a
+        # server error to the matching screen.
+        current = [m for m in rows("matches") if m.get("status") in ("active", "paused") and _user in (m.get("user_a"), m.get("user_b"))]
+        if current:
+            inserted = max(current, key=lambda item: item.get("created_at") or "")
+            partner = profile(inserted["user_b"] if inserted["user_a"] == _user else inserted["user_a"])
+            return [{"city": inserted["city"], "status": "matched", "match": {**inserted, "partner": partner}}]
+        return [{"city": dream, "status": "waiting"} for dream in dreams]
     return [{"city": city, "status": "matched", "match": {**inserted, "partner": partner}}]
 
 
@@ -135,6 +146,14 @@ def process_window(body: ProcessRequest, background: BackgroundTasks, user_id: s
     window = one("windows", id=str(body.window_id))
     if not window or window.get("sender_id") != user_id:
         raise HTTPException(status_code=404, detail="Window not found.")
+    match_row = one("matches", id=window["match_id"])
+    if not match_row or match_row.get("status") != "active":
+        raise HTTPException(status_code=409, detail="This pen pal window is not active.")
+    if not (
+        (match_row.get("user_a") == user_id and match_row.get("user_b") == window.get("recipient_id"))
+        or (match_row.get("user_b") == user_id and match_row.get("user_a") == window.get("recipient_id"))
+    ):
+        raise HTTPException(status_code=409, detail="This window does not belong to the active match.")
     background.add_task(process_pipeline, str(body.window_id))
     return {"ok": True}
 

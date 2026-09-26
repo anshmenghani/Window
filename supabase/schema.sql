@@ -73,6 +73,10 @@ create table if not exists public.knocks (
   pattern jsonb not null default '[0]'::jsonb,
   created_at timestamptz not null default now()
 );
+alter table public.knocks drop constraint if exists knocks_pattern_shape;
+alter table public.knocks add constraint knocks_pattern_shape check (
+  jsonb_typeof(pattern) = 'array' and jsonb_array_length(pattern) between 1 and 10
+);
 
 create table if not exists public.reports (
   id uuid primary key default gen_random_uuid(),
@@ -161,13 +165,99 @@ create policy m_read on public.matches for select to authenticated using (auth.u
 drop policy if exists m_upd on public.matches;
 create policy m_upd on public.matches for update to authenticated using (auth.uid() in (user_a,user_b)) with check (auth.uid() in (user_a,user_b));
 
+-- The app may only change a match's status. The AI service uses the service-role
+-- key to cache an itinerary, so it bypasses this client-side guard.
+create or replace function public.guard_client_match_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.role() = 'authenticated' then
+    if new.user_a is distinct from old.user_a
+      or new.user_b is distinct from old.user_b
+      or new.city is distinct from old.city
+      or new.reason is distinct from old.reason
+      or new.itinerary is distinct from old.itinerary
+      or new.created_at is distinct from old.created_at then
+      raise exception 'Only a match status can be changed by a client.';
+    end if;
+    if old.status = 'ended' and new.status <> 'ended' then
+      raise exception 'An ended match cannot be reopened.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists guard_client_match_update on public.matches;
+create trigger guard_client_match_update before update on public.matches
+for each row execute function public.guard_client_match_update();
+
+-- Serialise active-match creation across both profiles, so concurrent matching
+-- requests cannot give either person more than one current pen pal.
+create or replace function public.enforce_one_current_match()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.status in ('active', 'paused') then
+    perform 1 from public.profiles
+      where id in (new.user_a, new.user_b)
+      order by id for update;
+    if exists (
+      select 1 from public.matches m
+      where m.id is distinct from new.id
+        and m.status in ('active', 'paused')
+        and (new.user_a in (m.user_a, m.user_b) or new.user_b in (m.user_a, m.user_b))
+    ) then
+      raise exception 'Each person can only have one active or paused match.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists enforce_one_current_match on public.matches;
+create trigger enforce_one_current_match before insert or update on public.matches
+for each row execute function public.enforce_one_current_match();
+
 alter table public.windows enable row level security;
 drop policy if exists w_read on public.windows;
 create policy w_read on public.windows for select to authenticated using (auth.uid() in (sender_id,recipient_id));
 drop policy if exists w_ins on public.windows;
-create policy w_ins on public.windows for insert to authenticated with check (sender_id = auth.uid() and exists (select 1 from public.matches m where m.id=match_id and auth.uid() in (m.user_a,m.user_b)));
+create policy w_ins on public.windows for insert to authenticated with check (
+  sender_id = auth.uid() and exists (
+    select 1 from public.matches m
+    where m.id = match_id and m.status = 'active'
+      and ((m.user_a = auth.uid() and m.user_b = recipient_id)
+        or (m.user_b = auth.uid() and m.user_a = recipient_id))
+  )
+);
 drop policy if exists w_upd on public.windows;
 create policy w_upd on public.windows for update to authenticated using (recipient_id=auth.uid()) with check (recipient_id=auth.uid());
+
+-- A recipient can bookmark a window, but may not alter its media, sender,
+-- recipient, date, or match. The AI service bypasses this guard while adding
+-- redaction and map metadata.
+create or replace function public.guard_client_window_update()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.role() = 'authenticated' and (
+    new.id is distinct from old.id
+    or new.match_id is distinct from old.match_id
+    or new.sender_id is distinct from old.sender_id
+    or new.recipient_id is distinct from old.recipient_id
+    or new.photo_path is distinct from old.photo_path
+    or new.audio_path is distinct from old.audio_path
+    or new.caption is distinct from old.caption
+    or new.spot is distinct from old.spot
+    or new.spot_lat is distinct from old.spot_lat
+    or new.spot_lng is distinct from old.spot_lng
+    or new.local_date is distinct from old.local_date
+    or new.created_at is distinct from old.created_at
+  ) then
+    raise exception 'A client may only change whether a received window is saved.';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists guard_client_window_update on public.windows;
+create trigger guard_client_window_update before update on public.windows
+for each row execute function public.guard_client_window_update();
 
 alter table public.window_translations enable row level security;
 drop policy if exists t_read on public.window_translations;

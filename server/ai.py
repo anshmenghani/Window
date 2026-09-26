@@ -63,8 +63,9 @@ def hide_contact(text: str) -> str:
 
 def translate_window(photo_url: str, caption: str, transcript: str | None, src: str, lang: str, city: str, country: str) -> dict[str, Any]:
     prompt = window_system_prompt(src, lang, city, country)
+    transcript_text = transcript if transcript is not None else "[absent: no voice note was sent]"
     content = [
-        {"type": "text", "text": f"Caption: {caption}\nTranscript: {transcript or ''}"},
+        {"type": "text", "text": f"Caption: {caption}\nTranscript: {transcript_text}"},
         {"type": "image_url", "image_url": {"url": photo_url, "detail": "high"}},
     ]
     response = client().chat.completions.create(
