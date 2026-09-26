@@ -2,17 +2,17 @@
 // and their windows pinned up like polaroids.
 import { useCallback, useEffect, useState } from 'react';
 import { Image as RNImage, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withDelay, withSpring } from 'react-native-reanimated';
 import MapView, { Marker } from 'react-native-maps';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PaperGrain, Thumbtack } from '@/components/materials';
 import { T } from '@/components/ui';
-import { getMatches, getWall } from '@/lib/data';
+import { getMatches, getPortrait, getWall } from '@/lib/data';
 import { stampLine } from '@/lib/time';
 import { colors, fonts, gutter, motion, shadow, textures } from '@/lib/theme';
-import type { Match, WindowItem } from '@/lib/types';
+import type { Match, Portrait, WindowItem } from '@/lib/types';
 
 // Windows without a named spot get a stable pin near the city center
 function jitter(id: string) {
@@ -22,6 +22,16 @@ function jitter(id: string) {
 }
 
 const TILTS = [-3, 2.5, -1.5, 3.5, -2.5, 1.5];
+
+/** A polaroid that swings a little on its pin before it settles. `from` is the starting swing in degrees. */
+function Settle({ delay, from, children }: { delay: number; from: number; children: React.ReactNode }) {
+  const swing = useSharedValue(from);
+  useEffect(() => {
+    swing.value = withDelay(delay + 150, withSpring(0, { damping: 5, stiffness: 70 }));
+  }, [delay, swing]);
+  const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${swing.value}deg` }] }));
+  return <Animated.View style={[{ transformOrigin: '50% 0%' }, style]}>{children}</Animated.View>;
+}
 const TACKS = [colors.terracotta, colors.dusk, colors.light, colors.sky];
 
 export default function Wall() {
@@ -29,6 +39,7 @@ export default function Wall() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [windows, setWindows] = useState<WindowItem[]>([]);
+  const [portrait, setPortrait] = useState<Portrait | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -42,7 +53,9 @@ export default function Wall() {
   );
 
   useEffect(() => {
-    if (selected) getWall(selected).then(setWindows).catch(() => setWindows([]));
+    if (!selected) return;
+    getWall(selected).then(setWindows).catch(() => setWindows([]));
+    getPortrait(selected).then(setPortrait).catch(() => setPortrait(null));
   }, [selected]);
 
   const match = matches.find((m) => m.id === selected);
@@ -54,13 +67,19 @@ export default function Wall() {
       <RNImage source={textures.cork} resizeMode="repeat" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: gutter, paddingTop: 14, paddingBottom: 30, gap: 20 }} showsVerticalScrollIndicator={false}>
         {/* title card pinned to the board */}
-        <View style={[{ alignSelf: 'flex-start', backgroundColor: colors.postcard, paddingVertical: 10, paddingHorizontal: 16, transform: [{ rotate: '-1.5deg' }] }, shadow.card]}>
+        {/* their city, as you've come to know it: rewritten by the AI after every letter */}
+        <View style={[{ alignSelf: portrait ? 'stretch' : 'flex-start', marginRight: portrait ? 14 : 0, backgroundColor: colors.postcard, paddingVertical: 12, paddingHorizontal: 16, gap: 4, transform: [{ rotate: '-1deg' }] }, shadow.card]}>
           <PaperGrain />
           <Thumbtack style={{ position: 'absolute', top: -6, left: '48%' }} />
           <T variant="eyebrow" style={{ color: colors.muted }}>
-            {p ? `${windows.length} window${windows.length === 1 ? '' : 's'} from ${p.name}` : 'Your wall'}
+            {p
+              ? portrait
+                ? `As you know it · from ${portrait.letters} letter${portrait.letters === 1 ? '' : 's'}`
+                : `${windows.length} window${windows.length === 1 ? '' : 's'} from ${p.name}`
+              : 'Your wall'}
           </T>
           <T variant="title">{p ? `${p.name}'s ${p.home_city}` : 'Wall'}</T>
+          {portrait ? <T style={{ fontSize: 15, lineHeight: 22, color: colors.ink, marginTop: 2 }}>{portrait.text}</T> : null}
         </View>
 
         {p ? (
@@ -103,6 +122,7 @@ export default function Wall() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 18 }}>
           {windows.map((w, i) => (
             <Animated.View key={w.id} entering={FadeInDown.delay(i * motion.stagger * 2).duration(motion.settle)} style={{ width: cardW }}>
+              <Settle delay={i * 110} from={i % 2 ? -6 : 6}>
               <Pressable
                 onPress={() => router.push({ pathname: '/window/[id]', params: { id: w.id } })}
                 style={({ pressed }) => [
@@ -121,6 +141,7 @@ export default function Wall() {
                 <Thumbtack color={TACKS[i % TACKS.length]} size={13} style={{ position: 'absolute', top: -5, left: cardW / 2 - 7 }} />
                 {w.saved ? <Text style={{ position: 'absolute', right: 10, top: 10, fontSize: 16, color: colors.light }}>★</Text> : null}
               </Pressable>
+              </Settle>
             </Animated.View>
           ))}
         </View>

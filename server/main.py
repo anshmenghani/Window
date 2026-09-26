@@ -225,11 +225,138 @@ def process_pipeline(window_id: str) -> None:
             fields["steps"] = steps
             update_translation(window_id, fields)
         update_translation(window_id, {"status": "ready", "steps": steps, "error": None})
+        try:
+            remember_letter(window, match_row or {}, sender, recipient, translated, spot)
+        except Exception:
+            pass  # memories are a bonus; a delivered window never fails because of them
     except Exception as exc:
         try:
             update_translation(window_id, {"status": "failed", "error": str(exc)[:1000]})
         except Exception:
             pass
+
+
+def stamp_date(local_date: str | None) -> str:
+    try:
+        return datetime.fromisoformat(str(local_date)).strftime("%b %d").upper()
+    except Exception:
+        return datetime.now(timezone.utc).strftime("%b %d").upper()
+
+
+def remember_letter(window: dict[str, Any], match_row: dict[str, Any], sender: dict[str, Any], recipient: dict[str, Any], translated: dict[str, Any], spot: str | None) -> None:
+    """After a window is delivered: update the reader's portrait of the sender's city and award memory stamps."""
+    sb = get_supabase()
+    match_id = window["match_id"]
+    sender_name, reader_name = sender.get("name") or "Your pen pal", recipient.get("name") or "you"
+    reader_lang = (recipient.get("languages") or ["en"])[0]
+    sender_lang = (sender.get("languages") or ["en"])[0]
+    letters = rows("windows", match_id=match_id)
+    from_sender = [w for w in letters if w.get("sender_id") == window["sender_id"]]
+    date = stamp_date(window.get("local_date"))
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 1) "Their city, as you know it", rewritten with this letter (in the reader's language)
+    previous = one("portraits", match_id=match_id, reader_id=recipient["id"])
+    letter = {
+        "caption": translated.get("caption_t"), "voice_note": translated.get("transcript_t"),
+        "travel_note": translated.get("context_note"), "place": spot, "date": str(window.get("local_date")),
+    }
+    memory = ai.remember((previous or {}).get("text"), letter, sender_name, reader_name, sender.get("home_city") or "", reader_lang)
+    if memory.get("portrait"):
+        sb.table("portraits").upsert({
+            "match_id": match_id, "reader_id": recipient["id"], "subject_id": sender["id"],
+            "text": memory["portrait"], "letters": len(from_sender), "updated_at": now,
+        }).execute()
+
+    stamps: list[dict[str, Any]] = []
+
+    def add(owner: dict[str, Any], kind: str, title: str, dedupe: str, sub: str = date, translate: bool = True) -> None:
+        lang = (owner.get("languages") or ["en"])[0]
+        stamps.append({
+            "match_id": match_id, "owner_id": owner["id"], "kind": kind, "window_id": window["id"], "dedupe": dedupe, "sub": sub,
+            "title": ai.localize(title, lang) if translate else title,
+        })
+
+    # 2) a place or moment worth remembering (the reader has now "been" there)
+    if memory.get("stamp"):
+        earlier = [x for x in rows("stamps", match_id=match_id, owner_id=recipient["id"]) if x.get("kind") in ("place", "moment")]
+        if len(earlier) <= len(from_sender) // 2:  # keep them special: roughly one per two letters at most
+            add(recipient, "place", memory["stamp"], f"window:{window['id']}", translate=False)
+
+    # 3) the very first letter between them
+    if len(letters) == 1:
+        add(recipient, "first", f"First letter from {sender_name}", "first")
+        add(sender, "first", f"Your first letter to {reader_name}", "first")
+
+    # 4) the first time one of them sent their voice
+    if window.get("audio_path") and not any(w.get("audio_path") for w in from_sender if w["id"] != window["id"]):
+        add(recipient, "voice", f"First time you heard {sender_name}'s voice", f"voice:{sender['id']}")
+        add(sender, "voice", f"{reader_name} heard your voice", f"voice:{sender['id']}")
+
+    # 5) they both answered the same daily prompt
+    if window.get("prompt_id"):
+        answered = {w.get("sender_id") for w in letters if w.get("prompt_id") == window["prompt_id"]}
+        prompt = one("daily_prompts", id=window["prompt_id"])
+        if prompt and len(answered) >= 2:
+            km = 0
+            if None not in (sender.get("lat"), sender.get("lng"), recipient.get("lat"), recipient.get("lng")):
+                km = int(round(ai.distance_km(sender["lat"], sender["lng"], recipient["lat"], recipient["lng"]), -2))
+            sub = f"{date} · {km:,} KM APART" if km else date
+            for person in (sender, recipient):
+                side = "a" if person["id"] == match_row.get("user_a") else "b"
+                add(person, "together", prompt.get(f"stamp_{side}") or prompt.get("stamp_a") or "Together", f"prompt:{prompt['id']}", sub=sub, translate=False)
+
+    if stamps:
+        sb.table("stamps").upsert(stamps, on_conflict="match_id,owner_id,dedupe", ignore_duplicates=True).execute()
+
+
+class PromptRequest(BaseModel):
+    match_id: UUID
+
+
+@app.post("/prompt")
+def todays_prompt(body: PromptRequest, user_id: str = Depends(require_user)) -> dict[str, Any] | None:
+    """Today's shared prompt for a pen pal pair. Written once per day (UTC) from what they share and how close they are."""
+    sb = get_supabase()
+    match_row = one("matches", id=str(body.match_id))
+    if not match_row or user_id not in (match_row.get("user_a"), match_row.get("user_b")):
+        raise HTTPException(status_code=404, detail="Match not found.")
+    if match_row.get("status") == "ended":
+        return None
+    today = datetime.now(timezone.utc).date().isoformat()
+    letters = rows("windows", match_id=match_row["id"])
+    prompt = one("daily_prompts", match_id=match_row["id"], prompt_date=today)
+    if not prompt:
+        a, b = profile(match_row["user_a"]), profile(match_row["user_b"])
+        senders_by_prompt: dict[str, set[str]] = {}
+        for w in letters:
+            if w.get("prompt_id"):
+                senders_by_prompt.setdefault(w["prompt_id"], set()).add(w["sender_id"])
+        together = sum(1 for s in senders_by_prompt.values() if len(s) >= 2)
+        level = ai.bond_level(len(letters), together)
+        recent = sb.table("daily_prompts").select("theme").eq("match_id", match_row["id"]).order("prompt_date", desc=True).limit(10).execute().data or []
+        translations = {t["window_id"]: t for t in rows("window_translations", match_id=match_row["id"])}
+        names = {a["id"]: a.get("name") or "A", b["id"]: b.get("name") or "B"}
+        recent_letters = [
+            f"{names.get(w['sender_id'], '')}: {(translations.get(w['id']) or {}).get('caption_t') or w.get('caption') or ''}"
+            for w in sorted(letters, key=lambda x: x.get("created_at") or "", reverse=True)[:6]
+        ]
+        generated = ai.daily_prompt(a, b, level, [r["theme"] for r in recent if r.get("theme")], recent_letters)
+        sb.table("daily_prompts").upsert(
+            {"match_id": match_row["id"], "prompt_date": today, "level": level, **generated},
+            on_conflict="match_id,prompt_date", ignore_duplicates=True,
+        ).execute()
+        prompt = one("daily_prompts", match_id=match_row["id"], prompt_date=today)
+    if not prompt:
+        return None
+    side = "a" if user_id == match_row["user_a"] else "b"
+    partner_id = match_row["user_b"] if side == "a" else match_row["user_a"]
+    answered = {w.get("sender_id") for w in letters if w.get("prompt_id") == prompt["id"]}
+    return {
+        "id": prompt["id"], "match_id": prompt["match_id"], "prompt_date": str(prompt["prompt_date"]),
+        "text": prompt.get(f"text_{side}"), "why": prompt.get(f"why_{side}"), "level": prompt.get("level") or 1,
+        "answered_by_me": user_id in answered, "answered_by_them": partner_id in answered,
+    }
 
 
 class ItineraryRequest(BaseModel):

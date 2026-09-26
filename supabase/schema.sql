@@ -47,6 +47,9 @@ create table if not exists public.windows (
   unique (match_id, sender_id, local_date)
 );
 
+-- A window can answer the day's shared prompt (see daily_prompts below).
+alter table public.windows add column if not exists prompt_id uuid;
+
 create table if not exists public.window_translations (
   window_id uuid primary key references public.windows on delete cascade,
   match_id uuid references public.matches on delete cascade,
@@ -249,6 +252,7 @@ begin
     or new.spot_lng is distinct from old.spot_lng
     or new.local_date is distinct from old.local_date
     or new.created_at is distinct from old.created_at
+    or new.prompt_id is distinct from old.prompt_id
   ) then
     raise exception 'A client may only change whether a received window is saved.';
   end if;
@@ -300,3 +304,84 @@ on conflict (id) do update set public=true;
 drop policy if exists media_up on storage.objects;
 create policy media_up on storage.objects for insert to authenticated
 with check (bucket_id='media' and (storage.foldername(name))[1]=auth.uid()::text);
+
+
+-- =====================================================================
+-- The AI that grows with the friendship (Sat): daily shared prompts,
+-- memory stamps, a portrait of their city, and write-back suggestions.
+-- Only the AI server (service role) writes these; people can only read their own.
+-- =====================================================================
+
+-- One line on each translation suggesting how to answer with your own world.
+alter table public.window_translations add column if not exists reply_prompt text;
+
+-- Today's prompt for a pen pal pair: the same idea, written in each person's language.
+-- *_a is for matches.user_a, *_b for matches.user_b.
+create table if not exists public.daily_prompts (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.matches on delete cascade,
+  prompt_date date not null,
+  theme text,
+  level int not null default 1,
+  text_a text not null, why_a text, stamp_a text,
+  text_b text not null, why_b text, stamp_b text,
+  created_at timestamptz not null default now(),
+  unique (match_id, prompt_date)
+);
+alter table public.daily_prompts enable row level security;
+drop policy if exists dp_read on public.daily_prompts;
+create policy dp_read on public.daily_prompts for select to authenticated using (
+  exists (select 1 from public.matches m where m.id = match_id and auth.uid() in (m.user_a, m.user_b))
+);
+
+do $$ begin
+  alter table public.windows add constraint windows_prompt_fk foreign key (prompt_id) references public.daily_prompts on delete set null;
+exception when duplicate_object then null; end $$;
+
+-- A window may only point at a prompt from its own match; anything else is quietly dropped.
+create or replace function public.check_window_prompt()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.prompt_id is not null and not exists (
+    select 1 from public.daily_prompts p where p.id = new.prompt_id and p.match_id = new.match_id
+  ) then
+    new.prompt_id := null;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists check_window_prompt on public.windows;
+create trigger check_window_prompt before insert on public.windows
+for each row execute function public.check_window_prompt();
+
+-- Passport stamps that mark real moments. Each person gets their own copy in their language.
+-- `dedupe` stops the same moment being stamped twice (e.g. 'first', 'voice', 'prompt:<id>', 'window:<id>').
+create table if not exists public.stamps (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.matches on delete cascade,
+  owner_id uuid not null references public.profiles on delete cascade,
+  kind text not null check (kind in ('first','voice','together','place','moment')),
+  title text not null,
+  sub text,
+  window_id uuid references public.windows on delete set null,
+  dedupe text not null,
+  created_at timestamptz not null default now(),
+  unique (match_id, owner_id, dedupe)
+);
+alter table public.stamps enable row level security;
+drop policy if exists st_read on public.stamps;
+create policy st_read on public.stamps for select to authenticated using (owner_id = auth.uid());
+
+-- "Their city, as you know it": one portrait per reader, rewritten after each window they receive.
+create table if not exists public.portraits (
+  match_id uuid not null references public.matches on delete cascade,
+  reader_id uuid not null references public.profiles on delete cascade,
+  subject_id uuid not null references public.profiles on delete cascade,
+  text text not null,
+  letters int not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (match_id, reader_id)
+);
+alter table public.portraits enable row level security;
+drop policy if exists pr_read on public.portraits;
+create policy pr_read on public.portraits for select to authenticated using (reader_id = auth.uid());

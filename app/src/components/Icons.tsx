@@ -210,3 +210,24 @@ export function YouTabIcon({ size = 22, color }: P) {
     </Svg>
   );
 }
+/** A pushpin, for the Wall. */
+export function PushpinTabIcon({ size = 22, color }: P) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 22 22" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M13.8 2.6l5.6 5.6" />
+      <Path d="M16.2 5l-4.2 4.2-3.7-.4-1.7 1.7 6.3 6.3 1.7-1.7-.4-3.7 4.2-4.2" />
+      <Path d="M10.1 14L3.4 20.7" />
+    </Svg>
+  );
+}
+/** A luggage name tag on a string, for You. */
+export function NameTagTabIcon({ size = 22, color }: P) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 22 22" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M11 9L8 2.5M11 9l3-6.5" />
+      <Rect x={3.5} y={8} width={15} height={12} rx={2} />
+      <Circle cx={11} cy={11} r={0.9} />
+      <Path d="M7.5 15h7M8.5 17.5h5" />
+    </Svg>
+  );
+}

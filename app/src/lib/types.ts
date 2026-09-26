@@ -22,6 +22,10 @@ export type WindowItem = {
   stickers: Sticker[]; src_lang?: Lang; lang?: Lang; spot?: string;
   spot_lat?: number; spot_lng?: number; saved: boolean; local_date: string;
   created_at: string; status: WindowStatus;
+  /** AI: one line in the reader's language suggesting how to answer with your own world */
+  reply_prompt?: string;
+  /** the daily prompt this window answers, if any */
+  prompt_id?: string;
 };
 export type WindowProgress = { status: WindowStatus; steps: { safety?: boolean; transcribed?: boolean; translated?: boolean; voiced?: boolean }; caption_t?: string };
 export type Knock = { id: string; from_user: string; to_user: string; source: 'window' | 'app'; pattern: number[]; created_at: string };
@@ -29,6 +33,38 @@ export type ItineraryStop = { day: number; place: string; tip: string };
 export type SendWindowInput = {
   id: string; matchId: string; recipientId: string; photoUri: string; audioUri?: string;
   caption: string; spot?: string; localDate: string;
+  /** set when this window answers today's shared prompt */
+  promptId?: string;
 };
 
 export type LocationCheck = { verified: boolean; distance_km: number };
+
+/** Today's shared prompt: the same idea for both pen pals, in each person's own language. */
+export type DailyPrompt = {
+  id: string; match_id: string; prompt_date: string;
+  text: string; // "Show each other your coffee today."
+  why: string; // "You both love coffee."
+  level: BondLevel;
+  answered_by_me: boolean; answered_by_them: boolean;
+};
+
+/** How close two pen pals have become, worked out from what they've actually shared. */
+export type BondLevel = 1 | 2 | 3 | 4;
+export type Bond = {
+  level: BondLevel; name: string; next?: string;
+  progress: number; // 0..1 toward the next level
+  letters: number; // windows exchanged (both directions)
+  together: number; // daily prompts you both answered
+  voices: number; // windows with a voice note
+  days: number;
+};
+
+/** A passport stamp that marks a real moment in your letters. */
+export type MemoryStamp = {
+  id: string; title: string; sub: string;
+  kind: 'first' | 'voice' | 'together' | 'place' | 'moment';
+  window_id?: string; created_at: string;
+};
+
+/** "Aiko's Kyoto, as you know it": a short portrait built only from what they've shown you. */
+export type Portrait = { text: string; letters: number; updated_at: string };

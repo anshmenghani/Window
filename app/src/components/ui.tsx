@@ -1,10 +1,10 @@
 // Shared building blocks: type, card-stock buttons, text links, label-tag selections, inputs, ledger headers.
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import {
   ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, TextInput, TextInputProps, TextProps,
   TextStyle, View, ViewStyle,
 } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, motion, radius, shadow } from '@/lib/theme';
@@ -52,12 +52,22 @@ export function Button({ title, onPress, variant = 'primary', disabled, loading,
   if (variant === 'ghost') return <TextLink title={title} onPress={onPress} disabled={disabled} dark={dark} style={[{ alignSelf: 'center', paddingVertical: 12 }, style]} />;
   const isPrimary = variant === 'primary';
   const off = disabled || loading;
+  // a soft squish under your thumb
+  const squish = useSharedValue(1);
+  const squishStyle = useAnimatedStyle(() => ({ transform: [{ scale: squish.value }] }));
   return (
+    <Animated.View style={[squishStyle, style]}>
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled: !!off }}
       disabled={off}
-      onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+      onPressIn={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        squish.value = withTiming(0.97, { duration: 80 });
+      }}
+      onPressOut={() => {
+        squish.value = withSpring(1, { damping: 10, stiffness: 260 });
+      }}
       onPress={onPress}
       style={({ pressed }) => [
         btn.base,
@@ -67,7 +77,6 @@ export function Button({ title, onPress, variant = 'primary', disabled, loading,
         isPrimary && pressed && { transform: [{ translateX: 2 }, { translateY: 2 }] },
         !isPrimary && pressed && { opacity: 0.7 },
         off && { opacity: 0.45 },
-        style,
       ]}
     >
       {loading ? (
@@ -82,6 +91,7 @@ export function Button({ title, onPress, variant = 'primary', disabled, loading,
         </View>
       )}
     </Pressable>
+    </Animated.View>
   );
 }
 
@@ -159,15 +169,20 @@ export function BackButton({ onPress }: { onPress: () => void }) {
 export function Chip({
   label, selected, onPress, dashed, small,
 }: { label: string; selected?: boolean; onPress?: () => void; dashed?: boolean; small?: boolean }) {
-  // A selected tag is pressed down a hair and inked; nothing wobbles.
-  const lift = useSharedValue(0);
+  // Selecting a tag makes it swing on its string for a moment, like a luggage label.
+  const swing = useSharedValue(0);
+  const first = useRef(true);
   useEffect(() => {
-    lift.value = withSpring(selected ? -1 : 0, motion.spring);
-  }, [selected, lift]);
-  const anim = useAnimatedStyle(() => ({ transform: [{ translateY: lift.value }] }));
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (selected) swing.value = withSequence(withTiming(-7, { duration: 90 }), withTiming(4.5, { duration: 130 }), withSpring(0, { damping: 6, stiffness: 180 }));
+  }, [selected, swing]);
+  const anim = useAnimatedStyle(() => ({ transform: [{ rotate: `${swing.value}deg` }] }));
 
   return (
-    <Animated.View style={anim}>
+    <Animated.View style={[{ transformOrigin: '13px 50%' }, anim]}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ selected: !!selected }}

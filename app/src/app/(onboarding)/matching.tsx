@@ -7,6 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Screen, Spacer } from '@/components/Screen';
 import { Arch } from '@/components/Arch';
+import { Crane } from '@/components/Crane';
+import { COZY } from '@/lib/config';
 import { Button, T } from '@/components/ui';
 import { findMatches } from '@/lib/data';
 import { useSession } from '@/lib/session';
@@ -27,6 +29,9 @@ export default function Matching() {
   // warm lamplight drifting slowly behind the frosted glass
   const glow = useSharedValue(0);
   const glowStyle = useAnimatedStyle(() => ({ transform: [{ translateY: 40 - glow.value * 80 }, { translateX: -20 + glow.value * 40 }] }));
+  // the crane drifts back and forth in front of the window while it searches
+  const drift = useSharedValue(0);
+  const driftStyle = useAnimatedStyle(() => ({ transform: [{ translateX: -70 + drift.value * 140 }, { translateY: Math.sin(drift.value * Math.PI) * -18 }, { scaleX: 1 }] }));
 
   const run = () => {
     setError(null);
@@ -41,6 +46,7 @@ export default function Matching() {
 
   useEffect(() => {
     glow.value = withRepeat(withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.sin) }), -1, true);
+    drift.value = withRepeat(withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.sin) }), -1, true);
     return run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -65,6 +71,11 @@ export default function Matching() {
           <BlurView intensity={30} tint="dark" style={{ position: 'absolute', inset: 0 }} />
         </View>
       </Arch>
+      {COZY.crane ? (
+        <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: 150, alignSelf: 'center' }, driftStyle]}>
+          <Crane size={70} mood={done ? 'alert' : 'fly'} perched={false} />
+        </Animated.View>
+      ) : null}
 
       <View style={{ gap: 10, alignItems: 'center' }}>
         <T variant="title" style={{ color: colors.nightSoft, textAlign: 'center' }}>

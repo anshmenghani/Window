@@ -38,7 +38,7 @@ export function RhythmMarks({ pattern, color = colors.postcard }: { pattern: num
   );
 }
 
-export function KnockPad({ partner }: { partner: Profile }) {
+export function KnockPad({ partner, onSent }: { partner: Profile; onSent?: () => void }) {
   const taps = useRef<number[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [state, setState] = useState<'idle' | 'tapping' | 'sent' | 'error'>('idle');
@@ -52,6 +52,7 @@ export function KnockPad({ partner }: { partner: Profile }) {
     const p = taps.current.map((t) => t - first);
     taps.current = [];
     setState('sent');
+    onSent?.();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     sendKnock(partner.id, p)
       .then(() => setTimeout(() => { setState('idle'); setPattern([]); }, 2400))

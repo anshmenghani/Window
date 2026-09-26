@@ -7,4 +7,5 @@ export const {
   findMatches, getMatches, setMatchStatus,
   newWindowId, sendWindow, watchWindow, getToday, getWindow, saveWindow, getWall,
   watchInbox, sendKnock, getItinerary, reportUser,
+  getTodayPrompt, getBond, getStamps, getPortrait,
 } = src;

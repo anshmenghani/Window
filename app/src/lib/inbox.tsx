@@ -21,11 +21,13 @@ type Banner =
 type Inbox = {
   /** Goes up by one every time a new window arrives. Screens watch it to refresh. */
   version: number;
+  /** Goes up by one every time someone knocks on your window (the sill crane hops). */
+  knocks: number;
   /** Plays a knock rhythm as haptic taps. */
   playKnock: (pattern: number[]) => void;
 };
 
-const InboxContext = createContext<Inbox>({ version: 0, playKnock: () => {} });
+const InboxContext = createContext<Inbox>({ version: 0, knocks: 0, playKnock: () => {} });
 
 export function playKnockHaptics(pattern: number[]) {
   const start = pattern[0] ?? 0;
@@ -37,6 +39,7 @@ export function playKnockHaptics(pattern: number[]) {
 export function InboxProvider({ children }: { children: ReactNode }) {
   const { profile } = useSession();
   const [version, setVersion] = useState(0);
+  const [knocks, setKnocks] = useState(0);
   const [banner, setBanner] = useState<Banner | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
@@ -64,6 +67,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
       },
       onKnock: async (k) => {
         playKnockHaptics(k.pattern);
+        setKnocks((n) => n + 1);
         const p = await partnerName(k.from_user);
         show({ kind: 'knock', knock: k, name: p.name });
       },
@@ -72,7 +76,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
   }, [active, show]);
 
   return (
-    <InboxContext.Provider value={{ version, playKnock: playKnockHaptics }}>
+    <InboxContext.Provider value={{ version, knocks, playKnock: playKnockHaptics }}>
       {children}
       {banner ? (
         <Animated.View

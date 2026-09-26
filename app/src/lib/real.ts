@@ -2,7 +2,8 @@ import * as Crypto from 'expo-crypto';
 import { api } from './api';
 import { getPushToken } from './notifications';
 import { supabase } from './supabase';
-import type { ItineraryStop, Knock, LocationCheck, Match, MatchResult, Profile, SendWindowInput, WindowItem, WindowProgress, WindowStatus } from './types';
+import { bondFrom } from './bond';
+import type { Bond, DailyPrompt, MemoryStamp, Portrait, ItineraryStop, Knock, LocationCheck, Match, MatchResult, Profile, SendWindowInput, WindowItem, WindowProgress, WindowStatus } from './types';
 
 const fail = (error: { message?: string; code?: string } | null, fallback: string): never => {
   throw new Error(error?.message || fallback);
@@ -108,7 +109,7 @@ export async function sendWindow(input: SendWindowInput): Promise<void> {
   const { error } = await supabase.from('windows').insert({
     id: input.id, match_id: input.matchId, sender_id: senderId, recipient_id: input.recipientId,
     photo_path: photoPath, audio_path: audioPath, caption: input.caption, spot: input.spot || null,
-    local_date: input.localDate,
+    local_date: input.localDate, prompt_id: input.promptId || null,
   });
   if (error?.code === '23505') throw new Error("You already sent today's window.");
   if (error) fail(error, 'Could not send your window. Please try again.');
@@ -160,6 +161,7 @@ async function mapWindow(row: DbWindow, translation?: Record<string, any> | null
     spot: row.spot || undefined, spot_lat: row.spot_lat ?? undefined, spot_lng: row.spot_lng ?? undefined,
     saved: Boolean(row.saved), local_date: row.local_date, created_at: row.created_at,
     status: statusOf(translation?.status),
+    reply_prompt: translation?.reply_prompt || undefined, prompt_id: row.prompt_id || undefined,
   };
 }
 
@@ -266,4 +268,46 @@ export async function reportUser(userId: string, reason: string, windowId?: stri
   if (blockError) fail(blockError, 'Your report was sent, but this person could not be blocked.');
   const { error: matchError } = await supabase.from('matches').update({ status: 'ended' }).or(`and(user_a.eq.${reporter_id},user_b.eq.${userId}),and(user_a.eq.${userId},user_b.eq.${reporter_id})`);
   if (matchError) fail(matchError, 'Your report was sent, but the match could not be ended.');
+}
+
+// ---------- the AI that grows with the friendship ----------
+
+/** Today's shared prompt for this pen pal pair, in my language. The server writes it once a day. */
+export async function getTodayPrompt(matchId: string): Promise<DailyPrompt | null> {
+  return api<DailyPrompt | null>('/prompt', { match_id: matchId });
+}
+
+/** Counted from the windows we can both see, so it's the same number on both phones. */
+export async function getBond(matchId: string): Promise<Bond> {
+  const { data: matchRow, error: matchError } = await supabase.from('matches').select('created_at').eq('id', matchId).single();
+  if (matchError || !matchRow) fail(matchError, 'Could not load this match.');
+  const { data, error } = await supabase.from('windows').select('sender_id,audio_path,prompt_id').eq('match_id', matchId);
+  if (error) fail(error, 'Could not load your letters.');
+  const rows = data || [];
+  const answeredBy = new Map<string, Set<string>>();
+  for (const w of rows) {
+    if (!w.prompt_id) continue;
+    if (!answeredBy.has(w.prompt_id)) answeredBy.set(w.prompt_id, new Set());
+    answeredBy.get(w.prompt_id)!.add(w.sender_id);
+  }
+  const together = [...answeredBy.values()].filter((senders) => senders.size >= 2).length;
+  const voices = rows.filter((w) => w.audio_path).length;
+  const days = Math.max(1, Math.floor((Date.now() - new Date(matchRow!.created_at).getTime()) / 86400000) + 1);
+  return bondFrom(rows.length, together, voices, days);
+}
+
+/** My passport's memory stamps for this pen pal, newest first (each person has their own, in their language). */
+export async function getStamps(matchId: string): Promise<MemoryStamp[]> {
+  const id = await currentUserId();
+  const { data, error } = await supabase.from('stamps').select('*').eq('match_id', matchId).eq('owner_id', id).order('created_at', { ascending: false });
+  if (error) fail(error, 'Could not load your stamps.');
+  return (data || []).map((r) => ({ id: r.id, title: r.title, sub: r.sub || '', kind: r.kind, window_id: r.window_id || undefined, created_at: r.created_at }));
+}
+
+/** "Their city, as you know it": written only from what they've shown me. */
+export async function getPortrait(matchId: string): Promise<Portrait | null> {
+  const id = await currentUserId();
+  const { data, error } = await supabase.from('portraits').select('text,letters,updated_at').eq('match_id', matchId).eq('reader_id', id).maybeSingle();
+  if (error) fail(error, 'Could not load the portrait.');
+  return data ? { text: data.text, letters: data.letters, updated_at: data.updated_at } : null;
 }

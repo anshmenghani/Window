@@ -12,9 +12,11 @@ import { VoicePlayer } from '@/components/VoicePlayer';
 import { PaperGrain } from '@/components/materials';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { BackButton, Button, T } from '@/components/ui';
-import { getMatches, getWindow, saveWindow } from '@/lib/data';
+import { getMatches, getWall, getWindow, saveWindow } from '@/lib/data';
+import { Envelope, Postmark } from '@/components/Cozy';
+import { COZY } from '@/lib/config';
 import { useSession } from '@/lib/session';
-import { openedWindows } from '@/lib/seen';
+import { openedWindows, unsealedWindows } from '@/lib/seen';
 import { languageName } from '@/lib/cities';
 import { timeIn } from '@/lib/time';
 import { colors, fonts, motion, shadow } from '@/lib/theme';
@@ -28,6 +30,9 @@ export default function OpenedWindow() {
   const [match, setMatch] = useState<Match | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [letterNo, setLetterNo] = useState<number | null>(null);
+  // a new window arrives sealed; the envelope opens once, the first time you look
+  const [sealed, setSealed] = useState(() => COZY.envelope && !!id && !unsealedWindows.has(id));
 
   useEffect(() => {
     if (!id) return;
@@ -37,6 +42,10 @@ export default function OpenedWindow() {
       setSaved(win.saved);
       const ms = await getMatches();
       setMatch(ms.find((m) => m.id === win.match_id) ?? null);
+      // count their letters so far: "Letter No. 4"
+      const wall = await getWall(win.match_id).catch(() => []);
+      const i = wall.findIndex((x) => x.id === win.id);
+      if (i >= 0) setLetterNo(wall.length - i);
     });
   }, [id]);
 
@@ -55,25 +64,48 @@ export default function OpenedWindow() {
   const translated = !!w.caption_t && w.caption_t !== w.caption;
   const shownCaption = showOriginal || !w.caption_t ? w.caption : w.caption_t;
   const myLang = languageName(profile?.languages[0]);
+  const showEnvelope = sealed && !fromMe;
+  const postDate = sender ? new Intl.DateTimeFormat('en-US', { timeZone: sender.tz, month: 'short', day: 'numeric' }).format(new Date(w.created_at)) : '';
 
   return (
     <Screen scroll gap={14} style={{ paddingHorizontal: 20 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <BackButton onPress={() => (router.canGoBack() ? router.back() : router.replace('/today'))} />
-        <View style={{ flex: 1 }}>
-          <T style={{ fontFamily: fonts.bold }}>{sender?.name ?? '…'} · {sender?.home_city ?? ''}</T>
+        <View style={{ flex: 1, gap: 1 }}>
+          <T variant="heading" style={{ fontSize: 19, lineHeight: 24 }}>{fromMe ? 'Your window' : `From ${sender?.name ?? '…'}`}</T>
           {sender ? (
-            <T variant="small">Sent at {timeIn(sender.tz, new Date(w.created_at))} {sender.home_city} time</T>
+            <Text style={{ fontFamily: fonts.medium, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.muted }}>
+              {letterNo && !fromMe ? `Letter No. ${letterNo} · ` : ''}{timeIn(sender.tz, new Date(w.created_at))} in {sender.home_city}
+            </Text>
           ) : null}
         </View>
+        {sender ? <Postmark city={sender.home_city} date={postDate} size={40} /> : null}
       </View>
 
-      <Arch width={archW} height={archH} border={10} bottomRadius={6} glass>
-        <Image source={{ uri: w.photo_url }} style={{ flex: 1 }} contentFit="cover" transition={250} />
-        {w.stickers.map((s, i) => (
-          <WordSticker key={`${s.word}-${i}`} sticker={s} index={i} lang={w.src_lang} boxW={archW - 20} boxH={archH - 20} />
-        ))}
-      </Arch>
+      <View>
+        <Arch width={archW} height={archH} border={10} bottomRadius={6} glass>
+          <Image source={{ uri: w.photo_url }} style={{ flex: 1 }} contentFit="cover" transition={250} />
+          {/* the word labels are pinned up once the envelope is open */}
+          {!showEnvelope ? w.stickers.map((s, i) => (
+            <WordSticker key={`${s.word}-${i}`} sticker={s} index={i} lang={w.src_lang} boxW={archW - 20} boxH={archH - 20} />
+          )) : null}
+        </Arch>
+        {showEnvelope ? (
+          <>
+            {/* the window waits behind the sealed envelope */}
+            <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: colors.mist, opacity: 0.55 }} />
+            <Envelope
+              width={Math.round(archW * 0.84)}
+              height={Math.round(archW * 0.56)}
+              initial={sender?.name?.[0] ?? '·'}
+              onOpened={() => {
+                unsealedWindows.add(w.id);
+                setSealed(false);
+              }}
+            />
+          </>
+        ) : null}
+      </View>
 
       {w.status === 'blocked' ? (
         <T style={{ color: colors.danger }}>This window was held back by our safety check.</T>
@@ -116,6 +148,14 @@ export default function OpenedWindow() {
             <T variant="eyebrow">Travel note</T>
           </View>
           <T style={{ fontSize: 15, lineHeight: 22, color: colors.ink }}>{w.context_note}</T>
+        </Animated.View>
+      ) : null}
+
+      {/* the AI's suggestion for how to answer with your own world */}
+      {!fromMe && w.reply_prompt ? (
+        <Animated.View entering={FadeInDown.delay(550).duration(motion.arrive)} style={{ gap: 4, paddingTop: 6, paddingHorizontal: 2 }}>
+          <Text style={{ fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', color: colors.walnut }}>Write back</Text>
+          <Text style={{ fontFamily: fonts.displayItalic, fontSize: 18, lineHeight: 24, color: colors.ink }}>{w.reply_prompt}</Text>
         </Animated.View>
       ) : null}
 

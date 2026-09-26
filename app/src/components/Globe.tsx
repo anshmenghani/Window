@@ -9,6 +9,8 @@ import Animated, {
 import Svg, { Circle, ClipPath, Defs, G, Path, RadialGradient, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@/lib/theme';
+import { COZY } from '@/lib/config';
+import { Crane } from './Crane';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -203,6 +205,15 @@ export function Globe({
     const p = project(g.lat, g.lng, lat0, lng0, R, C, lift);
     const q = project(g2.lat, g2.lng, lat0, lng0, R, C, lift);
     const angle = (Math.atan2(q.y - p.y, q.x - p.x) * 180) / Math.PI;
+    if (COZY.crane) {
+      // the crane flies nose-first along the route with your postcard hanging beneath it
+      const east = q.x >= p.x;
+      const heading = east ? angle : angle > 0 ? angle - 180 : angle + 180;
+      return {
+        opacity: fly > 0.01 && fly < 1 ? 1 : 0,
+        transform: [{ translateX: p.x - 19 }, { translateY: p.y - 24 }, { rotate: `${heading * 0.3}deg` }, { scaleX: east ? -1 : 1 }, { scale: 1 + lift * 1.2 }],
+      };
+    }
     return {
       opacity: fly > 0.01 && fly < 1 ? 1 : fly >= 1 ? 0 : 0,
       transform: [{ translateX: p.x - 11 }, { translateY: p.y - 8 }, { rotate: `${angle * 0.35}deg` }, { scale: 1 + lift * 1.6 }],
@@ -258,15 +269,25 @@ export function Globe({
         <AnimatedCircle animatedProps={fromPin} r={5} fill={colors.terracotta} stroke="#FFF9ED" strokeWidth={1.5} />
         <AnimatedCircle animatedProps={toPin} r={5} fill={colors.walnut} stroke="#FFF9ED" strokeWidth={1.5} />
       </Svg>
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          { position: 'absolute', left: 0, top: 0, width: 22, height: 16, padding: 2, borderRadius: 2, backgroundColor: '#FFF9ED', shadowColor: '#2A1A0E', shadowOpacity: 0.3, shadowRadius: 3, elevation: 4 },
-          cardStyle,
-        ]}
-      >
-        <View style={{ flex: 1, backgroundColor: colors.terracotta, opacity: 0.85 }} />
-      </Animated.View>
+      {COZY.crane ? (
+        <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: 38, height: 40 }, cardStyle]}>
+          <Crane size={38} mood="fly" perched={false} />
+          {/* your postcard, held in its beak and hanging below */}
+          <View style={{ position: 'absolute', left: 9, top: 26, width: 13, height: 9, padding: 1.5, borderRadius: 1, backgroundColor: '#FFF9ED', transform: [{ rotate: '8deg' }], shadowColor: '#2A1A0E', shadowOpacity: 0.3, shadowRadius: 2, shadowOffset: { width: 0, height: 2 } }}>
+            <View style={{ flex: 1, backgroundColor: colors.terracotta, opacity: 0.85 }} />
+          </View>
+        </Animated.View>
+      ) : (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            { position: 'absolute', left: 0, top: 0, width: 22, height: 16, padding: 2, borderRadius: 2, backgroundColor: '#FFF9ED', shadowColor: '#2A1A0E', shadowOpacity: 0.3, shadowRadius: 3, elevation: 4 },
+            cardStyle,
+          ]}
+        >
+          <View style={{ flex: 1, backgroundColor: colors.terracotta, opacity: 0.85 }} />
+        </Animated.View>
+      )}
     </Pressable>
   );
 }

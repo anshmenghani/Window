@@ -6,7 +6,9 @@ from typing import Any
 import httpx
 from openai import OpenAI
 
-from prompts import WINDOW_SCHEMA, window_system_prompt
+from prompts import (
+    DAILY_PROMPT_SCHEMA, MEMORY_SCHEMA, WINDOW_SCHEMA, daily_prompt_system, memory_system, window_system_prompt,
+)
 
 
 def client() -> OpenAI:
@@ -109,3 +111,64 @@ def itinerary(windows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     parsed = json.loads(response.choices[0].message.content or "{}")
     stops = parsed if isinstance(parsed, list) else parsed.get("stops", [])
     return stops[:6]
+
+
+# ---------- bond: how close two pen pals have become ----------
+# Same thresholds as app/src/lib/bond.ts. Worked out only from what they've done together.
+BOND_LEVELS = [
+    {"level": 1, "name": "New pen pals", "letters": 0, "together": 0},
+    {"level": 2, "name": "Regular correspondents", "letters": 4, "together": 1},
+    {"level": 3, "name": "Close pen pals", "letters": 12, "together": 3},
+    {"level": 4, "name": "Old friends", "letters": 30, "together": 8},
+]
+
+
+def bond_level(letters: int, together: int) -> int:
+    level = 1
+    for step in BOND_LEVELS[1:]:
+        if letters >= step["letters"] and together >= step["together"]:
+            level = step["level"]
+    return level
+
+
+def _json_call(system: str, user: str, schema: dict[str, Any], name: str, max_tokens: int = 400) -> dict[str, Any]:
+    response = client().chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+        response_format={"type": "json_schema", "json_schema": {"name": name, "strict": True, "schema": schema}},
+        max_tokens=max_tokens,
+    )
+    return json.loads(response.choices[0].message.content or "{}")
+
+
+def daily_prompt(a: dict[str, Any], b: dict[str, Any], level: int, recent_themes: list[str], recent_letters: list[str]) -> dict[str, Any]:
+    """Today's shared photo prompt for a pen pal pair, in each person's language."""
+    shared = [x for x in (a.get("interests") or []) if x.casefold() in {y.casefold() for y in (b.get("interests") or [])}]
+    facts = {
+        "person_a": {"name": a.get("name"), "city": a.get("home_city"), "interests": a.get("interests") or []},
+        "person_b": {"name": b.get("name"), "city": b.get("home_city"), "interests": b.get("interests") or []},
+        "shared_interests": shared,
+        "recent_themes_do_not_repeat": recent_themes[:10],
+        "recent_letters": recent_letters[:6],
+    }
+    lang_a = (a.get("languages") or ["en"])[0]
+    lang_b = (b.get("languages") or ["en"])[0]
+    return _json_call(daily_prompt_system(lang_a, lang_b, level), json.dumps(facts, ensure_ascii=False), DAILY_PROMPT_SCHEMA, "daily_prompt")
+
+
+def remember(previous: str | None, letter: dict[str, Any], sender: str, reader: str, city: str, lang: str) -> dict[str, Any]:
+    """Rewrite the reader's portrait of the sender's city with one new letter; maybe name a moment stamp."""
+    user = json.dumps({"portrait_so_far": previous or "", "new_letter": letter}, ensure_ascii=False)
+    return _json_call(memory_system(sender, reader, city, lang), user, MEMORY_SCHEMA, "memory", max_tokens=300)
+
+
+def localize(text: str, lang: str) -> str:
+    """Short UI strings (stamp titles) into someone's language. English passes straight through."""
+    if not text or lang.startswith("en"):
+        return text
+    result = client().chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "system", "content": f"Translate this short passport-stamp title into {lang}. Keep names. Reply with the translation only."}, {"role": "user", "content": text}],
+        max_tokens=60,
+    )
+    return (result.choices[0].message.content or text).strip()

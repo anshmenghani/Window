@@ -1,7 +1,9 @@
 // Fake backend so every screen can be built and tested before the real one exists.
 // Same functions as real.ts (see data.ts). Edit freely: only Sid uses this file.
 import * as Crypto from 'expo-crypto';
+import { bondFrom } from './bond';
 import type {
+  Bond, DailyPrompt, MemoryStamp, Portrait,
   Profile, Match, MatchResult, WindowItem, WindowProgress, Knock, ItineraryStop, SendWindowInput, LocationCheck,
 } from './types';
 
@@ -81,21 +83,25 @@ const windows: WindowItem[] = [
       { word: '自転車', reading: 'jitensha', meaning: 'bicycle', x: 0.42, y: 0.38 },
     ],
     spot: 'Demachiyanagi', spot_lat: 35.03, spot_lng: 135.772,
+    reply_prompt: 'Aiko showed you her every-morning konbini stop. Show her where your morning starts.',
   }),
   fromAiko(1, {
     caption: '夕方はみんな鴨川の石段に座る', caption_t: 'everyone sits on the steps by the river at sunset',
     context_note: 'The Kamo River banks are Kyoto\'s living room. Students and couples line the stone steps every evening, spaced out almost perfectly.',
     spot: 'Kamo River', spot_lat: 35.015, spot_lng: 135.771, saved: true,
+    reply_prompt: 'She showed you where Kyoto gathers at sunset. Where does Atlanta gather?',
   }),
   fromAiko(3, {
     caption: '人が来る前の伏見稲荷', caption_t: 'fushimi inari before the crowds',
     context_note: 'Fushimi Inari has thousands of orange torii gates. Locals go at sunrise, before tour groups arrive.',
     spot: 'Fushimi Inari', spot_lat: 34.967, spot_lng: 135.773, saved: true,
+    reply_prompt: 'She got up early to show you Fushimi Inari empty. Show her a place in Atlanta that is best before everyone wakes up.',
   }),
   fromAiko(4, {
     caption: 'いちばん好きなラーメン屋', caption_t: 'my favorite ramen counter',
     context_note: 'Many ramen shops seat fewer than ten people at a counter. You buy a ticket from a machine by the door, then hand it to the cook.',
     spot: 'Ichijoji', spot_lat: 35.045, spot_lng: 135.79,
+    reply_prompt: 'You both love ramen. Show her the bowl you would take her to.',
   }),
 ];
 
@@ -183,8 +189,12 @@ export async function sendWindow(input: SendWindowInput): Promise<void> {
     id: input.id, match_id: input.matchId, sender_id: 'me', recipient_id: input.recipientId,
     photo_url: input.photoUri, audio_url: input.audioUri, caption: input.caption, spot: input.spot,
     stickers: [], saved: false, status: 'ready', local_date: input.localDate, created_at: new Date().toISOString(),
-    src_lang: 'en', lang: 'ja',
+    src_lang: 'en', lang: 'ja', prompt_id: input.promptId,
   });
+  if (input.promptId) todayPrompt.answered_by_me = true;
+  if (input.audioUri && !stamps.some((x) => x.kind === 'voice')) {
+    stamps.unshift({ id: 's-voice', title: 'Aiko heard your voice', sub: stampDate(0), kind: 'voice', created_at: new Date().toISOString() });
+  }
 }
 
 export function watchWindow(id: string, cb: (p: WindowProgress) => void): () => void {
@@ -261,4 +271,53 @@ export async function reportUser(userId: string, reason: string, windowId?: stri
   matches.forEach((m) => {
     if (m.partner.id === userId) m.status = 'ended';
   });
+}
+
+// ---------- the AI that grows with the friendship ----------
+const stampDate = (n: number) => new Date(Date.now() - n * 86400000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
+
+// Today's shared prompt, built from what you both love (you both picked Coffee)
+const todayPrompt: DailyPrompt = {
+  id: 'p-today', match_id: 'm-aiko', prompt_date: new Date().toISOString().slice(0, 10),
+  text: 'Show each other your coffee today.',
+  why: 'You both love coffee. Your cup, your counter, wherever you drink it.',
+  level: 2, answered_by_me: false, answered_by_them: false,
+};
+
+const stamps: MemoryStamp[] = [
+  { id: 's-ramen', title: 'Two bowls of ramen', sub: `${stampDate(2)} · 11,000 KM APART`, kind: 'together', created_at: daysAgo(2) },
+  { id: 's-kamo', title: 'Kamo River at sunset', sub: stampDate(1), kind: 'place', window_id: 'w1', created_at: daysAgo(1) },
+  { id: 's-inari', title: 'Fushimi Inari before the crowds', sub: stampDate(3), kind: 'place', window_id: 'w3', created_at: daysAgo(3) },
+  { id: 's-first', title: 'First letter from Aiko', sub: stampDate(4), kind: 'first', window_id: 'w4', created_at: daysAgo(4) },
+];
+
+export async function getTodayPrompt(matchId: string): Promise<DailyPrompt | null> {
+  await wait(250);
+  return matchId === 'm-aiko' ? { ...todayPrompt } : null;
+}
+
+export async function getBond(matchId: string): Promise<Bond> {
+  await wait(200);
+  const m = matches.find((x) => x.id === matchId);
+  const mine = sent.filter((w) => w.match_id === matchId);
+  const theirs = windows.filter((w) => w.match_id === matchId);
+  const together = stamps.filter((x) => x.kind === 'together').length;
+  const voices = [...mine, ...theirs].filter((w) => w.audio_url).length;
+  const days = m ? Math.max(1, Math.round((Date.now() - new Date(m.created_at).getTime()) / 86400000) + 1) : 1;
+  return bondFrom(mine.length + theirs.length, together, voices, days);
+}
+
+export async function getStamps(_matchId: string): Promise<MemoryStamp[]> {
+  await wait(200);
+  return stamps.map((x) => ({ ...x }));
+}
+
+export async function getPortrait(matchId: string): Promise<Portrait | null> {
+  await wait(250);
+  if (matchId !== 'm-aiko') return null;
+  return {
+    text: "Aiko's mornings start at a konbini near Demachiyanagi, where the egg sandwich is a ritual. Evenings belong to the Kamo River, where everyone sits on the stone steps, spaced out along the water. She'd tell you to see Fushimi Inari before 7, and her favorite ramen is a tiny counter in Ichijoji.",
+    letters: windows.filter((w) => w.match_id === matchId).length,
+    updated_at: daysAgo(0),
+  };
 }

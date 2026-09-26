@@ -5,9 +5,11 @@ import { PaperGrain } from './materials';
 
 export function Stamp({
   label, sub, color = colors.terracotta, textColor = colors.postcard, width = 70, height = 84, tilt = 4,
-  edgeColor = colors.mist, children,
+  edgeColor = colors.mist, children, lines = 2,
 }: {
   label: string; sub?: string; color?: string; textColor?: string; width?: number; height?: number; tilt?: number;
+  /** how many lines the title may use */
+  lines?: number;
   /** the color behind the stamp, used to cut the perforations */
   edgeColor?: string;
   children?: React.ReactNode;
@@ -23,10 +25,10 @@ export function Stamp({
       <View style={{ flex: 1, backgroundColor: color, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 5, gap: 3, opacity: 0.92, overflow: 'hidden' }}>
         <PaperGrain opacity={0.9} />
         {children}
-        <Text numberOfLines={2} style={{ fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.9, color: textColor, textAlign: 'center' }}>
+        <Text numberOfLines={lines} style={{ fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.9, color: textColor, textAlign: 'center', paddingHorizontal: 2 }}>
           {label.toUpperCase()}
         </Text>
-        {sub ? <Text style={{ fontFamily: fonts.medium, fontSize: 7.5, letterSpacing: 0.6, color: textColor, opacity: 0.85 }}>{sub}</Text> : null}
+        {sub ? <Text numberOfLines={2} style={{ fontFamily: fonts.medium, fontSize: 7.5, letterSpacing: 0.6, color: textColor, opacity: 0.85, textAlign: 'center' }}>{sub}</Text> : null}
       </View>
     </View>
   );

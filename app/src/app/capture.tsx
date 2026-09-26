@@ -1,6 +1,6 @@
 // Capture: take (or pick) today's photo, add a handwritten caption and a ≤15 s voice note, send.
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,21 +15,21 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { Arch } from '@/components/Arch';
 import { BARS, Waveform } from '@/components/Waveform';
-import { CloseIcon, FlipIcon, MicIcon, PhotosIcon } from '@/components/Icons';
+import { CheckIcon, CloseIcon, FlipIcon, MicIcon, PhotosIcon } from '@/components/Icons';
 import { Wood } from '@/components/materials';
 import { Button, IconButton, T } from '@/components/ui';
-import { getMatches, newWindowId, sendWindow } from '@/lib/data';
+import { getMatches, getTodayPrompt, newWindowId, sendWindow } from '@/lib/data';
 import { useSession } from '@/lib/session';
 import { reportSendError } from '@/lib/outbox';
 import { languageName } from '@/lib/cities';
 import { localDate, timeIn } from '@/lib/time';
 import { colors, fonts, radius, shadow } from '@/lib/theme';
-import type { Match } from '@/lib/types';
+import type { DailyPrompt, Match } from '@/lib/types';
 
 const MAX_MS = 15000;
 
 export default function Capture() {
-  const { match: matchId } = useLocalSearchParams<{ match?: string }>();
+  const { match: matchId, prompt: promptParam } = useLocalSearchParams<{ match?: string; prompt?: string }>();
   const { profile } = useSession();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [match, setMatch] = useState<Match | null>(null);
@@ -41,6 +41,9 @@ export default function Capture() {
   const [caption, setCaption] = useState('');
   const [spot, setSpot] = useState('');
   const [sending, setSending] = useState(false);
+  // today's shared prompt: attached when you came from the prompt slip, and you can untick it
+  const [prompt, setPrompt] = useState<DailyPrompt | null>(null);
+  const [forPrompt, setForPrompt] = useState(!!promptParam);
 
   // voice note
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
@@ -50,7 +53,11 @@ export default function Capture() {
   const [audioMs, setAudioMs] = useState(0);
 
   useEffect(() => {
-    getMatches().then((ms) => setMatch(ms.find((m) => m.id === matchId) ?? ms[0] ?? null));
+    getMatches().then((ms) => {
+      const m = ms.find((x) => x.id === matchId) ?? ms[0] ?? null;
+      setMatch(m);
+      if (m) getTodayPrompt(m.id).then((p) => setPrompt(p && !p.answered_by_me ? p : null)).catch(() => {});
+    });
   }, [matchId]);
 
   useEffect(() => {
@@ -115,6 +122,7 @@ export default function Capture() {
         id, matchId: match.id, recipientId: match.partner.id,
         photoUri: saved.uri, audioUri: audioUri ?? undefined,
         caption: caption.trim(), spot: spot.trim() || undefined, localDate: localDate(profile.tz),
+        promptId: prompt && forPrompt ? prompt.id : undefined,
       }).catch((e) => reportSendError(id, e instanceof Error ? e.message : 'Upload failed.'));
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -148,7 +156,11 @@ export default function Capture() {
       <Pressable onPress={photo ? () => setPhoto(null) : undefined} style={{ alignSelf: 'center' }}>
         {/* a dark walnut arch with a faint amber edge glow, like light from a lamp behind you */}
         <View style={{ shadowColor: colors.amber, shadowOpacity: 0.28, shadowRadius: 18, shadowOffset: { width: 0, height: 0 } }}>
-          <Arch width={archW} height={archH} border={10} bottomRadius={6} lifted={false} dark glass maskColor={colors.night}>
+          <Arch width={archW} height={archH} border={10} bottomRadius={6} lifted={false} dark glass
+            // Android's camera ignores rounded clipping, so only there do we paint over the corners.
+            // On iPhone the mask would make the lamp glow trace a square instead of the arch.
+            maskColor={Platform.OS === 'android' ? colors.night : undefined}
+          >
             {photo ? (
               <Image source={{ uri: photo }} style={{ flex: 1 }} contentFit="cover" />
             ) : permission?.granted ? (
@@ -167,6 +179,24 @@ export default function Capture() {
           </Arch>
         </View>
       </Pressable>
+
+      {prompt ? (
+        // today's prompt, as a tag you can tick or untick
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: forPrompt }}
+          onPress={() => setForPrompt((v) => !v)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.sm, borderWidth: 1, borderColor: forPrompt ? colors.amber : colors.nightLine }}
+        >
+          <View style={{ width: 18, height: 18, borderRadius: 3, borderWidth: 1.2, borderColor: forPrompt ? colors.amber : colors.nightMuted, alignItems: 'center', justifyContent: 'center', backgroundColor: forPrompt ? colors.amber : 'transparent' }}>
+            {forPrompt ? <CheckIcon size={10} color={colors.night} /> : null}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.2, color: colors.nightMuted }}>TODAY&apos;S PROMPT</Text>
+            <Text style={{ fontFamily: fonts.medium, fontSize: 14, color: colors.nightSoft }}>{prompt.text}</Text>
+          </View>
+        </Pressable>
+      ) : null}
 
       {!photo ? (
         <Pressable onPress={pickPhoto} style={{ flexDirection: 'row', alignSelf: 'center', alignItems: 'center', gap: 8, padding: 4 }}>
