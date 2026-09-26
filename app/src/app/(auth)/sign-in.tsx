@@ -6,8 +6,8 @@ import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen, Spacer } from '@/components/Screen';
 import { BackButton, Button, ErrorText, Field, T, TextLink } from '@/components/ui';
-import { signIn, signUp } from '@/lib/data';
-import { usernameToEmail } from '@/lib/config';
+import { saveProfile, signIn, signUp } from '@/lib/data';
+import { DEMO_ACCOUNTS, usernameToEmail } from '@/lib/config';
 import { useSession } from '@/lib/session';
 
 const USERNAME = /^[a-z0-9_.]{3,20}$/;
@@ -17,6 +17,21 @@ function friendly(message: string) {
   if (/already registered|already exists/i.test(message)) return 'That username is taken. Try another one.';
   if (/do not match|invalid login|invalid credentials/i.test(message)) return 'That username and password don\'t match.';
   return message.replace(/email/gi, 'username');
+}
+
+// A demo account that already exists: sign in and start sign-up over (its match and letters stay).
+async function demoSignUp(name: string, password: string) {
+  try {
+    await signUp(usernameToEmail(name), password);
+  } catch (e) {
+    if (!/already/i.test(e instanceof Error ? e.message : '')) throw e;
+    try {
+      await signIn(usernameToEmail(name), password);
+    } catch {
+      throw new Error(`"${name}" is a demo account. Use its usual password to go through sign-up again.`);
+    }
+    await saveProfile({ onboarded: false });
+  }
 }
 
 export default function SignIn() {
@@ -38,6 +53,12 @@ export default function SignIn() {
     }
     setBusy(true);
     try {
+      if (isSignup && DEMO_ACCOUNTS.includes(name)) {
+        await demoSignUp(name, password);
+        await refresh();
+        router.replace('/about');
+        return;
+      }
       if (isSignup) await signUp(usernameToEmail(name), password);
       else await signIn(usernameToEmail(name), password);
       const p = await refresh();

@@ -65,7 +65,9 @@ def chat(job: str, messages: list[dict[str, Any]], *, model: str, max_tokens: in
             text = (response.choices[0].message.content or "").strip()
             if not text:
                 raise ValueError("empty reply")
-            if schema is not None or json_object:
+            if schema is not None:
+                text = _conform(text, schema)
+            elif json_object:
                 json.loads(text)
             _log(job, "meta", started)
             return text
@@ -80,6 +82,17 @@ def chat(job: str, messages: list[dict[str, Any]], *, model: str, max_tokens: in
     response = client().chat.completions.create(model=model, messages=messages, max_tokens=max_tokens, **extra)
     _log(job, "openai", started)
     return (response.choices[0].message.content or "").strip()
+
+
+def _conform(text: str, schema: dict[str, Any]) -> str:
+    """Meta's structured output isn't strict: require every field and drop any extras (else fall back)."""
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError("reply is not an object")
+    missing = [key for key in schema.get("required", []) if key not in data]
+    if missing:
+        raise ValueError(f"reply is missing {missing}")
+    return json.dumps({key: data[key] for key in schema.get("properties", {}) if key in data}, ensure_ascii=False)
 
 
 def _meta_message(message: dict[str, Any]) -> dict[str, Any]:

@@ -236,7 +236,9 @@ def process_pipeline(window_id: str) -> None:
                 sb.table("windows").update({"caption": caption}).eq("id", window_id).execute()
         translated = ai.translate_window(photo_url, caption, transcript, translation["src_lang"], translation["lang"], sender.get("home_city") or "", sender.get("country") or "")
         steps["translated"] = True
-        fields = {**translated, "transcript": transcript, "steps": steps}
+        # save only the columns window_translations has (spot_suggestion is used below, not stored)
+        fields = {key: translated.get(key) for key in ("caption_t", "transcript_t", "context_note", "stickers", "reply_prompt")}
+        fields.update({"stickers": fields["stickers"] or [], "transcript": transcript, "steps": steps})
         update_translation(window_id, fields)
 
         spot = window.get("spot") or translated.get("spot_suggestion")
