@@ -1,12 +1,12 @@
 // You & safety: the answer to "is this safe with strangers?" Judges will ask.
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, Switch, Text, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, Switch, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { TAB_BAR_SPACE } from '@/components/TabBar';
-import { LocationIcon, LockIcon, ShieldIcon } from '@/components/Icons';
+import { BellIcon, LocationIcon, LockIcon, ShieldIcon } from '@/components/Icons';
 import { Button, Chip, Ledger, T, TextLink } from '@/components/ui';
-import { getMatches, getPhysicalWindow, myUsername, reportUser, resetDemo, saveProfile, setMatchStatus, signOut, testPhysicalWindow } from '@/lib/data';
+import { getMatches, getNotifications, getPhysicalWindow, myUsername, reportUser, resetDemo, saveProfile, setMatchStatus, setNotifications, signOut, testNotification, testPhysicalWindow } from '@/lib/data';
 import { DEMO_ACCOUNTS } from '@/lib/config';
 import { useSession } from '@/lib/session';
 import { languageName } from '@/lib/cities';
@@ -124,6 +124,8 @@ export default function You() {
 
       <WindowSection partner={matches[0]} />
 
+      <NotificationSection />
+
       <View>
         <Ledger label="Safety" />
         <SafetyRow icon={<LocationIcon size={18} color={colors.muted} />} title="City-level location only" sub="Your exact location is never shared" right={<AlwaysOn />} />
@@ -220,6 +222,70 @@ export default function You() {
         </View>
       </Modal>
     </Screen>
+  );
+}
+
+/** Phone notifications: a switch, plus a real test sent through the server to this phone. */
+function NotificationSection() {
+  const [state, setState] = useState<'on' | 'off' | 'denied' | 'unsupported' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  useFocusEffect(useCallback(() => {
+    getNotifications().then(setState).catch(() => setState('off'));
+  }, []));
+
+  const toggle = async (on: boolean) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const next = await setNotifications(on);
+      setState(next);
+      if (on && next === 'denied') setNote('Your phone is blocking notifications for Expo Go. Turn them on in Settings.');
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : 'Could not change notifications.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const test = async () => {
+    setBusy(true);
+    setNote('Sending…');
+    try {
+      const sent = await testNotification();
+      setNote(sent ? 'Sent. It should appear at the top of your screen in a few seconds.' : 'This phone isn\'t registered yet. Turn notifications off and on again.');
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : 'Could not send a test.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sub =
+    state === 'unsupported' ? 'Needs a real iPhone (not available in Expo Go on Android)'
+      : state === 'denied' ? 'Blocked in your phone\'s Settings'
+        : 'When a new window or knock arrives';
+  return (
+    <View>
+      <Ledger label="Notifications" />
+      <SafetyRow
+        icon={<BellIcon size={18} color={colors.muted} />}
+        title="Phone notifications"
+        sub={sub}
+        right={
+          <Switch
+            value={state === 'on'}
+            disabled={busy || state === null || state === 'unsupported'}
+            onValueChange={toggle}
+            trackColor={{ true: colors.dusk, false: colors.line }}
+            thumbColor={colors.white}
+          />
+        }
+      />
+      {state === 'denied' ? <TextLink title="Open Settings" onPress={() => Linking.openSettings()} style={{ marginTop: 10 }} /> : null}
+      {state === 'on' ? <TextLink title="Send me a test notification" disabled={busy} onPress={test} style={{ marginTop: 10 }} /> : null}
+      {note ? <T variant="small" style={{ marginTop: 6 }}>{note}</T> : null}
+    </View>
   );
 }
 

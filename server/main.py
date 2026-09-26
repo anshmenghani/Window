@@ -65,8 +65,13 @@ def health(db: bool = False) -> dict[str, Any]:
     return result
 
 
+class MatchRequest(BaseModel):
+    force: bool = False  # the "Match now" button: don't wait for the other person to be on the screen
+
+
 @app.post("/match")
-def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
+def match(body: MatchRequest | None = None, _user: str = Depends(require_user)) -> list[dict[str, Any]]:
+    force = bool(body and body.force)
     sb = get_supabase()
     me = profile(_user)
     if not me.get("onboarded"):
@@ -83,14 +88,15 @@ def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
     if current:
         m = max(current, key=lambda item: item.get("created_at") or "")
         partner = profile(m["user_b"] if m["user_a"] == _user else m["user_a"])
-        # A demo account replaying sign-up keeps its match (and letters), but the match is revealed
-        # live again: if the partner is replaying too, wait until they're on the matching screen.
-        if me.get("replay") and partner.get("replay") and not is_looking(partner, now):
-            return [{"city": m["city"], "status": "waiting"}]
-        done: dict[str, Any] = {"looking_at": None}
+        # A demo account replaying sign-up keeps its match (and letters), but it's only revealed when the
+        # partner is on their matching screen right now, or when "Match now" is pressed. Nothing else triggers it.
         if me.get("replay"):
-            done["replay"] = False
-        sb.table("profiles").update(done).eq("id", _user).execute()
+            if not force and not is_looking(partner, now, REPLAY_WINDOW):
+                return [{"city": m["city"], "status": "waiting"}]
+            # keep looking_at for a moment, so the partner's next check sees us and reveals too
+            sb.table("profiles").update({"replay": False}).eq("id", _user).execute()
+        else:
+            sb.table("profiles").update({"looking_at": None}).eq("id", _user).execute()
         return [{"city": m["city"], "status": "matched", "match": {**m, "partner": partner}}]
 
     blocked = rows("blocks")
@@ -103,7 +109,7 @@ def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
             candidate_id = candidate.get("id")
             if not candidate_id or candidate_id == _user or candidate_id in occupied:
                 continue
-            if not is_looking(candidate, now):
+            if not force and not is_looking(candidate, now):
                 continue
             if (_user, candidate_id) in blocked_pairs or (candidate_id, _user) in blocked_pairs:
                 continue
@@ -201,10 +207,11 @@ def demo_reset(_user: str = Depends(require_user)) -> dict[str, Any]:
 
 
 LOOKING_WINDOW = timedelta(minutes=10)
+REPLAY_WINDOW = timedelta(seconds=45)  # the matching screen checks every 4 s, so "on the screen now"
 
 
-def is_looking(candidate: dict[str, Any], now: datetime) -> bool:
-    """Only people who opened the matching screen in the last 10 minutes can be matched."""
+def is_looking(candidate: dict[str, Any], now: datetime, window: timedelta = LOOKING_WINDOW) -> bool:
+    """Only people who opened the matching screen recently (10 minutes by default) can be matched."""
     raw = candidate.get("looking_at")
     if not raw:
         return False
@@ -212,7 +219,7 @@ def is_looking(candidate: dict[str, Any], now: datetime) -> bool:
         since = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
     except ValueError:
         return False
-    return now - since <= LOOKING_WINDOW
+    return now - since <= window
 
 
 VERIFY_RADIUS_KM = 80
@@ -517,6 +524,20 @@ def letter_push(window: dict[str, Any], sender: dict[str, Any]) -> tuple[str, st
 def knock_push(knock: dict[str, Any], sender: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
     where = f" in {sender.get('home_city')}" if knock.get("source") == "window" and sender.get("home_city") else ""
     return f"{sender.get('name') or 'Someone'} knocked", f"Knock knock, on the window{where}", {"type": "knock", "id": knock.get("id")}
+
+
+@app.post("/notifications/off")
+def notifications_off(user_id: str = Depends(require_user)) -> dict[str, bool]:
+    """The You tab switch turned off: forget this person's phone, so nothing more is sent."""
+    get_supabase().table("push_tokens").delete().eq("user_id", user_id).execute()
+    return {"ok": True}
+
+
+@app.post("/notifications/test")
+def notifications_test(user_id: str = Depends(require_user)) -> dict[str, bool]:
+    """Sends a real notification to the caller's own phone, to prove the whole path works."""
+    sent = send_push(user_id, "Notifications are on", "This is how Window tells you a new window or knock has arrived.", {"type": "test"})
+    return {"sent": sent}
 
 
 class KnockHook(BaseModel):

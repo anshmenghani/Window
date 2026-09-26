@@ -127,6 +127,18 @@ export async function myUsername(): Promise<string | null> {
 
 export async function resetDemo(): Promise<void> {}
 
+let notificationsOn = true;
+export async function getNotifications(): Promise<'on' | 'off' | 'denied' | 'unsupported'> {
+  return notificationsOn ? 'on' : 'off';
+}
+export async function setNotifications(on: boolean): Promise<'on' | 'off' | 'denied' | 'unsupported'> {
+  notificationsOn = on;
+  return on ? 'on' : 'off';
+}
+export async function testNotification(): Promise<boolean> {
+  return true;
+}
+
 export async function signOut(): Promise<void> {
   signedIn = false;
 }
@@ -152,7 +164,7 @@ export async function verifyLocation(lat: number, lng: number): Promise<Location
 }
 
 // ---------- matching (ONE pen pal at a time) ----------
-export async function findMatches(): Promise<MatchResult[]> {
+export async function findMatches(_force = false): Promise<MatchResult[]> {
   await wait(3500); // long enough to see the Matching animation
   // Already have a pen pal? Return them.
   const current = matches.find((m) => m.status !== 'ended');

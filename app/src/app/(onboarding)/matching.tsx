@@ -33,8 +33,8 @@ export default function Matching() {
   const drift = useSharedValue(0);
   const driftStyle = useAnimatedStyle(() => ({ transform: [{ translateX: -70 + drift.value * 140 }, { translateY: Math.sin(drift.value * Math.PI) * -18 }, { scaleX: 1 }] }));
 
-  // While no one is free, keep checking every few seconds: the moment someone in your dream city
-  // opens this screen too, you both get matched and both phones flip to the postcard.
+  // While no one is free, keep checking every few seconds. The match only appears when the other
+  // person reaches their matching screen too, or "Match now" is tapped. It never jumps to the postcard.
   const poll = useRef<ReturnType<typeof setTimeout> | null>(null);
   const alive = useRef(true);
   const stopPolling = () => {
@@ -46,17 +46,32 @@ export default function Matching() {
       .then((r) => {
         if (!alive.current) return;
         setResults(r);
-        const found = r.find((x) => x.status === 'matched' && x.match);
-        if (found && tries > 0) {
-          // someone just arrived while you were waiting: reveal the postcard on its own
-          poll.current = setTimeout(() => router.replace({ pathname: '/match', params: { id: found.match!.id } }), 1600);
-        } else if (!found && tries < 150) {
-          poll.current = setTimeout(() => check(tries + 1), 4000);
-        }
+        const found = r.some((x) => x.status === 'matched' && x.match);
+        if (!found && tries < 150) poll.current = setTimeout(() => check(tries + 1), 4000);
       })
       .catch((e) => {
         if (alive.current) setError(e instanceof Error ? e.message : 'Matching failed.');
       });
+  };
+
+  // "Match now": find the match without waiting for the other person's screen
+  const [forcing, setForcing] = useState(false);
+  const [nobody, setNobody] = useState(false);
+  const matchNow = () => {
+    stopPolling();
+    setForcing(true);
+    setNobody(false);
+    findMatches(true)
+      .then((r) => {
+        if (!alive.current) return;
+        setResults(r);
+        if (!r.some((x) => x.status === 'matched' && x.match)) {
+          setNobody(true);
+          poll.current = setTimeout(() => check(1), 4000);
+        }
+      })
+      .catch((e) => alive.current && setError(e instanceof Error ? e.message : 'Matching failed.'))
+      .finally(() => alive.current && setForcing(false));
   };
 
   const run = () => {
@@ -141,7 +156,13 @@ export default function Matching() {
           {first?.match ? (
             <Button dark title="See your match" onPress={() => router.replace({ pathname: '/match', params: { id: first.match!.id } })} />
           ) : (
-            <TextLink dark title="Go to Today for now" onPress={() => router.replace('/today')} style={{ alignSelf: 'center' }} />
+            <View style={{ alignItems: 'center', gap: 6 }}>
+              {nobody ? <T variant="small" style={{ color: colors.nightMuted, textAlign: 'center' }}>No one in {city} is free right now.</T> : null}
+              <View style={{ flexDirection: 'row', gap: 28 }}>
+                <TextLink dark title={forcing ? 'Matching…' : 'Match now'} disabled={forcing} onPress={matchNow} />
+                <TextLink dark title="Go to Today" onPress={() => router.replace('/today')} />
+              </View>
+            </View>
           )}
         </Animated.View>
       ) : (

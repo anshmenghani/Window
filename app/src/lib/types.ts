@@ -7,6 +7,7 @@ export type Profile = {
   mutual_dreams: boolean; hide_contact: boolean; onboarded: boolean;
   /** demo accounts replaying sign-up: their match is revealed live again */
   replay?: boolean;
+  looking_at?: string | null;
   location_verified?: boolean; // set only by the server after a one-time location check
 };
 

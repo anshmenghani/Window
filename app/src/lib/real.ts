@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import { api } from './api';
-import { getPushToken } from './notifications';
+import { getPushToken, notificationPermission, notificationsWanted, setNotificationsWanted } from './notifications';
 import { supabase } from './supabase';
 import { bondFrom } from './bond';
 import type { Bond, DailyPrompt, MemoryStamp, PhysicalWindow, Portrait, ItineraryStop, Knock, LocationCheck, Match, MatchResult, Profile, SendWindowInput, WindowItem, WindowProgress, WindowStatus } from './types';
@@ -66,6 +66,7 @@ export async function saveProfile(p: Partial<Profile>): Promise<void> {
 
 export async function registerPushToken(): Promise<void> {
   try {
+    if (!(await notificationsWanted())) return; // turned off on the You tab
     const token = await getPushToken();
     if (!token) return;
     const id = await currentUserId();
@@ -74,13 +75,42 @@ export async function registerPushToken(): Promise<void> {
   } catch { /* Push is optional; sign-in and onboarding must continue. */ }
 }
 
+export type NotificationState = 'on' | 'off' | 'denied' | 'unsupported';
+
+/** The You tab switch: on only if you want them, the phone allows them, and the server has this phone. */
+export async function getNotifications(): Promise<NotificationState> {
+  const permission = await notificationPermission();
+  if (permission === 'unsupported') return 'unsupported';
+  if (!(await notificationsWanted())) return 'off';
+  if (permission === 'denied') return 'denied';
+  const { data } = await supabase.from('push_tokens').select('token').eq('user_id', await currentUserId()).maybeSingle();
+  return data?.token ? 'on' : 'off';
+}
+
+export async function setNotifications(on: boolean): Promise<NotificationState> {
+  await setNotificationsWanted(on);
+  if (!on) {
+    await api('/notifications/off', {});
+    return 'off';
+  }
+  await registerPushToken();
+  return getNotifications();
+}
+
+/** Sends this phone a real notification through the server, to prove the whole path works. */
+export async function testNotification(): Promise<boolean> {
+  const result = await api<{ sent: boolean }>('/notifications/test', {});
+  return result.sent;
+}
+
 // Sends the phone's position once; the server checks it against the home city and never stores it.
 export async function verifyLocation(lat: number, lng: number): Promise<LocationCheck> {
   return api<LocationCheck>('/verify-location', { lat, lng });
 }
 
-export async function findMatches(): Promise<MatchResult[]> {
-  return api<MatchResult[]>('/match', {});
+/** force: the "Match now" button, which doesn't wait for the other person to be on the screen. */
+export async function findMatches(force = false): Promise<MatchResult[]> {
+  return api<MatchResult[]>('/match', { force });
 }
 
 export async function getMatches(): Promise<Match[]> {

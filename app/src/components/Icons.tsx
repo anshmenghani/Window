@@ -133,6 +133,14 @@ export function BulbIcon({ size = 18, color = colors.honeyText }: P) {
   );
 }
 
+export function BellIcon({ size = 20, color = colors.postcard }: P) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M5 8.5a5 5 0 0 1 10 0c0 4 1.5 5.5 1.5 5.5h-13S5 12.5 5 8.5ZM8.3 16.5a1.8 1.8 0 0 0 3.4 0" />
+    </Svg>
+  );
+}
+
 export function ShieldIcon({ size = 20, color = colors.dusk }: P) {
   return (
     <Svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth={2}>

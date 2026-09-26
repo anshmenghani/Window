@@ -10,4 +10,5 @@ export const {
   getTodayPrompt, getBond, getStamps, getPortrait,
   getPhysicalWindow, testPhysicalWindow,
   myUsername, resetDemo,
+  getNotifications, setNotifications, testNotification,
 } = src;

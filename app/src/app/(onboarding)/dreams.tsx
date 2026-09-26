@@ -1,6 +1,7 @@
 // Dream places: pick up to 3 cities. You get ONE pen pal, the best fit who lives in any of them.
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import type { ScrollView } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import Svg, { Circle, Ellipse, G, Path } from 'react-native-svg';
 import { router } from 'expo-router';
@@ -28,6 +29,10 @@ export default function Dreams() {
   const [mutual, setMutual] = useState(profile?.mutual_dreams ?? true);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
+  // tapping the city box scrolls it to the top, so the results show above the keyboard
+  const scroller = useRef<ScrollView>(null);
+  const searchY = useRef(0);
+  const liftSearch = () => setTimeout(() => scroller.current?.scrollTo({ y: Math.max(0, searchY.current - 12), animated: true }), 120);
 
   // picked cities and your home still show up in search (with a note), so nothing seems to vanish
   const results = dreams.length < 3 ? searchCities(query) : [];
@@ -44,7 +49,7 @@ export default function Dreams() {
   };
 
   return (
-    <Screen scroll gap={18} style={{ paddingHorizontal: 28 }}>
+    <Screen scroll scrollRef={scroller} gap={18} style={{ paddingHorizontal: 28 }}>
       <StepHeader step={4} onBack={() => router.back()} />
       <View style={{ gap: 8 }}>
         <T variant="title">Where do you dream of going?</T>
@@ -93,8 +98,8 @@ export default function Dreams() {
       </View>
 
       {dreams.length < 3 ? (
-        <View style={{ gap: 8 }}>
-          <Field value={query} onChangeText={setQuery} placeholder="Search a city" left={<SearchIcon />} autoCorrect={false} inputStyle={{ height: 50 }} />
+        <View style={{ gap: 8 }} onLayout={(e) => { searchY.current = e.nativeEvent.layout.y; }}>
+          <Field value={query} onFocus={liftSearch} onChangeText={(t) => { setQuery(t); liftSearch(); }} placeholder="Search a city" left={<SearchIcon />} autoCorrect={false} inputStyle={{ height: 50 }} />
           {results.map((c) => {
             const picked = dreams.includes(c.name);
             const isHome = c.name === home;

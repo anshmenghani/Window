@@ -1,6 +1,7 @@
 // About you: first name, languages, home city. Only first name + city are shown to partners.
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
+import type { ScrollView } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Screen, Spacer } from '@/components/Screen';
@@ -22,6 +23,10 @@ export default function About() {
   const [city, setCity] = useState<City | undefined>(findCity(profile?.home_city));
   const [query, setQuery] = useState(city ? `${city.name}, ${city.country}` : '');
   const [busy, setBusy] = useState(false);
+  // tapping the city box scrolls it to the top, so the results show above the keyboard
+  const scroller = useRef<ScrollView>(null);
+  const searchY = useRef(0);
+  const liftSearch = () => setTimeout(() => scroller.current?.scrollTo({ y: Math.max(0, searchY.current - 12), animated: true }), 120);
   const [other, setOther] = useState(false);
   // languages you typed yourself are stored as their name ("Nepali")
   const own = langs.filter((code) => !LANGUAGES.some((l) => l.code === code));
@@ -59,7 +64,7 @@ export default function About() {
   };
 
   return (
-    <Screen scroll gap={24} style={{ paddingHorizontal: 28 }}>
+    <Screen scroll scrollRef={scroller} gap={24} style={{ paddingHorizontal: 28 }}>
       <StepHeader step={1} onBack={back} />
       <View style={{ gap: 8 }}>
         <T variant="title">Hi! Tell us a little about you.</T>
@@ -91,13 +96,15 @@ export default function About() {
         {other ? <AddOwn placeholder="Type a language" onAdd={addOwn} onClose={() => setOther(false)} /> : null}
       </View>
 
-      <View style={{ gap: 8 }}>
+      <View style={{ gap: 8 }} onLayout={(e) => { searchY.current = e.nativeEvent.layout.y; }}>
         <Field
           label="Home city"
+          onFocus={liftSearch}
           value={query}
           onChangeText={(t) => {
             setQuery(t);
             setCity(undefined);
+            liftSearch();
           }}
           placeholder="Search your city"
           left={<PinIcon />}

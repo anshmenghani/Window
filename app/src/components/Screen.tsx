@@ -11,6 +11,8 @@ type Props = {
   scroll?: boolean;
   /** turn scrolling off for a moment, e.g. while a finger is held on a record button */
   scrollEnabled?: boolean;
+  /** lets a screen scroll itself, e.g. bring a search box above the keyboard */
+  scrollRef?: React.Ref<ScrollView>;
   dark?: boolean;
   bg?: string;
   padBottom?: number; // extra bottom space (e.g. for the floating tab bar)
@@ -22,7 +24,7 @@ type Props = {
   textured?: boolean;
 };
 
-export function Screen({ children, scroll, scrollEnabled = true, dark, bg, padBottom = 0, gap = 18, style, refreshControl, edges = ['top', 'bottom'], textured }: Props) {
+export function Screen({ children, scroll, scrollEnabled = true, scrollRef, dark, bg, padBottom = 0, gap = 18, style, refreshControl, edges = ['top', 'bottom'], textured }: Props) {
   const background = bg ?? (dark ? colors.night : colors.mist);
   const inner: StyleProp<ViewStyle> = [{ paddingHorizontal: gutter, paddingTop: 12, paddingBottom: 16 + padBottom, gap }, style];
   return (
@@ -32,6 +34,7 @@ export function Screen({ children, scroll, scrollEnabled = true, dark, bg, padBo
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {scroll ? (
           <ScrollView
+            ref={scrollRef}
             contentContainerStyle={[{ flexGrow: 1 }, inner]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
