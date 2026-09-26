@@ -228,6 +228,10 @@ export function watchInbox(h: { onWindow: (w: WindowItem) => void; onKnock: (k: 
 }
 export async function sendKnock(toUser: string, pattern: number[]): Promise<void> {
   await wait(200);
+  // Same rule as the real backend: no knocks while the window is paused
+  if (!matches.some((m) => m.partner.id === toUser && m.status === 'active')) {
+    throw new Error('Knocks are available when your pen pal window is active.');
+  }
 }
 
 // ---------- passport + safety ----------

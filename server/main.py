@@ -233,8 +233,8 @@ def push_hook(payload: dict[str, Any], x_hook_secret: str | None = Header(defaul
         data = {"type": "window", "id": record.get("window_id")}
     else:
         return {"ok": True}
-    recipient = profile(recipient_id)
-    token = recipient.get("expo_push_token")
+    token_row = one("push_tokens", user_id=recipient_id)
+    token = (token_row or {}).get("token") or profile(recipient_id).get("expo_push_token")
     if token:
         response = httpx.post("https://exp.host/--/api/v2/push/send", json={"to": token, "title": title, "body": body, "sound": "default", "data": data}, timeout=10)
         response.raise_for_status()

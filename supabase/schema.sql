@@ -91,13 +91,41 @@ create table if not exists public.blocks (
   check (blocker_id <> blocked_id)
 );
 
+-- Push tokens live in their own table so other users can never read them.
+-- The server reads them with the service-role key when sending a push.
+create table if not exists public.push_tokens (
+  user_id uuid primary key references public.profiles on delete cascade,
+  token text not null,
+  updated_at timestamptz not null default now()
+);
+insert into public.push_tokens (user_id, token)
+  select id, expo_push_token from public.profiles where expo_push_token is not null
+  on conflict (user_id) do nothing;
+update public.profiles set expo_push_token = null where expo_push_token is not null;
+
 alter table public.profiles enable row level security;
 drop policy if exists p_read on public.profiles;
-create policy p_read on public.profiles for select to authenticated using (true);
+-- You can read your own profile and the profiles of people you are (or were) matched with.
+-- Matching runs on the server with the service-role key, so the app never needs to list strangers.
+create policy p_read on public.profiles for select to authenticated using (
+  id = auth.uid() or exists (
+    select 1 from public.matches m
+    where (m.user_a = auth.uid() and m.user_b = profiles.id)
+       or (m.user_b = auth.uid() and m.user_a = profiles.id)
+  )
+);
 drop policy if exists p_ins on public.profiles;
 create policy p_ins on public.profiles for insert to authenticated with check (id = auth.uid());
 drop policy if exists p_upd on public.profiles;
 create policy p_upd on public.profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
+
+alter table public.push_tokens enable row level security;
+drop policy if exists pt_read on public.push_tokens;
+create policy pt_read on public.push_tokens for select to authenticated using (user_id = auth.uid());
+drop policy if exists pt_ins on public.push_tokens;
+create policy pt_ins on public.push_tokens for insert to authenticated with check (user_id = auth.uid());
+drop policy if exists pt_upd on public.push_tokens;
+create policy pt_upd on public.push_tokens for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 alter table public.matches enable row level security;
 drop policy if exists m_read on public.matches;

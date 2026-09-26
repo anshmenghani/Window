@@ -57,7 +57,8 @@ export async function registerPushToken(): Promise<void> {
     const token = await getPushToken();
     if (!token) return;
     const id = await currentUserId();
-    await supabase.from('profiles').update({ expo_push_token: token }).eq('id', id);
+    // Stored in push_tokens (only you can read it), not on the profile your pen pal can see.
+    await supabase.from('push_tokens').upsert({ user_id: id, token, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   } catch { /* Push is optional; sign-in and onboarding must continue. */ }
 }
 
@@ -214,14 +215,17 @@ export async function getWall(matchId: string): Promise<WindowItem[]> {
 export function watchInbox(handlers: { onWindow: (window: WindowItem) => void; onKnock: (knock: Knock) => void }): () => void {
   let stopped = false;
   let channel: ReturnType<typeof supabase.channel> | undefined;
+  // Realtime can't tell us the previous status on RLS tables, so remember what we've already announced.
+  const delivered = new Set<string>();
   void supabase.auth.getUser().then(({ data, error }) => {
     const id = data.user?.id;
     if (stopped || error || !id) return;
     channel = supabase.channel(`inbox-${id}-${Date.now()}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'window_translations', filter: `recipient_id=eq.${id}` }, (payload) => {
         const next = payload.new as any;
-        const previous = payload.old as any;
-        if (next.status === 'ready' && previous.status !== 'ready') void getWindow(next.window_id).then(handlers.onWindow).catch(() => undefined);
+        if (next.status !== 'ready' || delivered.has(next.window_id)) return;
+        delivered.add(next.window_id);
+        void getWindow(next.window_id).then(handlers.onWindow).catch(() => delivered.delete(next.window_id));
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'knocks', filter: `to_user=eq.${id}` }, (payload) => {
         const knock = payload.new as Knock;

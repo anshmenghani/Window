@@ -10,6 +10,11 @@ HackGT 13 · hacking ends **Sun Sep 27, 8:00 AM** · 4-person team
 > **Never commit keys.** `.env` files are gitignored. Commit messages are plain descriptions, with no AI co-author trailers.
 
 ## Changelog (newest first)
+- **Sat 4:40 AM · Sid (fixes from reviewing Isha's backend):**
+  - **Re-run `supabase/schema.sql`** in the SQL editor (it's safe to re-run). It adds a **`push_tokens`** table (`user_id` pk, `token`, `updated_at`; only you can read or write your own row), moves any existing `profiles.expo_push_token` values into it, and **tightens `profiles` reads to yourself + people you're matched with.** Matching runs on the server with the service-role key, so the app never lists strangers. The Pi still reads its partner's profile (they're matched).
+  - `registerPushToken` (real.ts) now upserts into `push_tokens`. `/hooks/push` reads the token from `push_tokens` (falls back to the old profile column).
+  - `watchInbox` announces each ready window **once** (Realtime can't send the old `status` on RLS tables, so it was re-firing).
+  - The knock button shows the backend's error (e.g. "Knocks are available when your pen pal window is active.") instead of silently resetting. The mock follows the same paused rule.
 - **Sat 4:05 AM · Sid: ONE PEN PAL AT A TIME.** People still pick up to 3 dream cities, but each person has **at most one** match that isn't `ended`, on both sides.
   - **`POST /match` (section 8):** if the caller already has an `active`/`paused` match, return just that one as `[{city, status:'matched', match}]`. Otherwise pool candidates from **all** dream cities, **exclude any candidate who already has an `active`/`paused` match**, score them the same way, and create **one** match with the best candidate. If there's nobody free, return `[{city, status:'waiting'}, …]` for each dream city.
   - **`getMatches()` (section 7):** returns at most one match (the newest non-ended one). Screens use `matches[0]`.

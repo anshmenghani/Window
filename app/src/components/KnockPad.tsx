@@ -15,7 +15,8 @@ const MAX_KNOCKS = 10;
 export function KnockPad({ partner }: { partner: Profile }) {
   const taps = useRef<number[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [state, setState] = useState<'idle' | 'tapping' | 'sent'>('idle');
+  const [state, setState] = useState<'idle' | 'tapping' | 'sent' | 'error'>('idle');
+  const [errorText, setErrorText] = useState('');
   const [count, setCount] = useState(0);
   const shake = useSharedValue(0);
   const iconStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${shake.value}deg` }] }));
@@ -27,8 +28,15 @@ export function KnockPad({ partner }: { partner: Profile }) {
     setCount(0);
     setState('sent');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    sendKnock(partner.id, pattern).catch(() => setState('idle'));
-    setTimeout(() => setState('idle'), 2200);
+    sendKnock(partner.id, pattern)
+      .then(() => setTimeout(() => setState('idle'), 2200))
+      .catch((e) => {
+        // e.g. the window is paused: say so instead of silently resetting
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setErrorText(e instanceof Error ? e.message : 'Your knock didn\'t go through. Try again.');
+        setState('error');
+        setTimeout(() => setState('idle'), 3500);
+      });
   };
 
   const onTap = () => {
@@ -45,7 +53,8 @@ export function KnockPad({ partner }: { partner: Profile }) {
   const hint =
     state === 'tapping' ? `${'• '.repeat(count).trim()}  keep going, or pause to send`
       : state === 'sent' ? `Sent! ${partner.name}'s window is knocking`
-        : `Tap a rhythm. ${partner.name}'s window knocks it back.`;
+        : state === 'error' ? errorText
+          : `Tap a rhythm. ${partner.name}'s window knocks it back.`;
 
   return (
     <Pressable
@@ -53,7 +62,7 @@ export function KnockPad({ partner }: { partner: Profile }) {
       accessibilityLabel={`Knock on ${partner.name}'s window`}
       onPress={onTap}
       style={({ pressed }) => [
-        { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: radius.lg, backgroundColor: state === 'sent' ? colors.okBg : colors.honey },
+        { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: radius.lg, backgroundColor: state === 'sent' ? colors.okBg : state === 'error' ? '#FBE4E2' : colors.honey },
         pressed && { transform: [{ scale: 0.98 }] },
       ]}
     >
@@ -62,7 +71,7 @@ export function KnockPad({ partner }: { partner: Profile }) {
       </Animated.View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.ink }}>Knock on {partner.name}&apos;s window</Text>
-        <Text style={{ fontFamily: fonts.body, fontSize: 13, color: state === 'sent' ? colors.ok : colors.honeyText }}>{hint}</Text>
+        <Text style={{ fontFamily: fonts.body, fontSize: 13, color: state === 'sent' ? colors.ok : state === 'error' ? colors.danger : colors.honeyText }}>{hint}</Text>
       </View>
     </Pressable>
   );
