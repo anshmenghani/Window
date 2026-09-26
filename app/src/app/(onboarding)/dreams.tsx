@@ -1,5 +1,5 @@
 // Dream places: pick up to 3 cities. You get ONE pen pal, the best fit who lives in any of them.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import type { ScrollView } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
@@ -29,6 +29,14 @@ export default function Dreams() {
   const [mutual, setMutual] = useState(profile?.mutual_dreams ?? true);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
+  // If the profile arrives after this screen opened (slow network), fill in what's still empty
+  const filled = useRef(!!profile);
+  useEffect(() => {
+    if (!profile || filled.current) return;
+    filled.current = true;
+    setDreams((d) => (d.length ? d : profile.dream_places ?? []));
+    setMutual(profile.mutual_dreams ?? true);
+  }, [profile]);
   // tapping the city box scrolls it to the top, so the results show above the keyboard
   const scroller = useRef<ScrollView>(null);
   const searchY = useRef(0);

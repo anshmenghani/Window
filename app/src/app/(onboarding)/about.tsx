@@ -1,5 +1,5 @@
 // About you: first name, languages, home city. Only first name + city are shown to partners.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import type { ScrollView } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -23,6 +23,19 @@ export default function About() {
   const [city, setCity] = useState<City | undefined>(findCity(profile?.home_city));
   const [query, setQuery] = useState(city ? `${city.name}, ${city.country}` : '');
   const [busy, setBusy] = useState(false);
+  // If the profile arrives after this screen opened (slow network), fill in what's still empty
+  const filled = useRef(!!profile);
+  useEffect(() => {
+    if (!profile || filled.current) return;
+    filled.current = true;
+    setName((n) => n || profile.name || '');
+    setLangs((l) => (l.length ? l : profile.languages ?? []));
+    const c = findCity(profile.home_city);
+    if (c) {
+      setCity((x) => x ?? c);
+      setQuery((q) => q || `${c.name}, ${c.country}`);
+    }
+  }, [profile]);
   // tapping the city box scrolls it to the top, so the results show above the keyboard
   const scroller = useRef<ScrollView>(null);
   const searchY = useRef(0);

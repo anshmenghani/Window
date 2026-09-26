@@ -1,5 +1,5 @@
 // Interests: gives the matcher something real to match on. Pick at least 3.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -13,6 +13,13 @@ export default function Interests() {
   const { profile, refresh } = useSession();
   const [picked, setPicked] = useState<string[]>(profile?.interests ?? []);
   const [busy, setBusy] = useState(false);
+  // If the profile arrives after this screen opened (slow network), fill in what's still empty
+  const filled = useRef(!!profile);
+  useEffect(() => {
+    if (!profile || filled.current) return;
+    filled.current = true;
+    setPicked((p) => (p.length ? p : profile.interests ?? []));
+  }, [profile]);
   const [other, setOther] = useState(false);
   // your own interests (typed under Other) show as tags next to the usual ones
   const own = picked.filter((p) => !INTERESTS.some((i) => i.toLowerCase() === p.toLowerCase()));

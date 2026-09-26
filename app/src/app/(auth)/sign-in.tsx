@@ -56,7 +56,8 @@ export default function SignIn() {
     try {
       if (isSignup && DEMO_ACCOUNTS.includes(name)) {
         await demoSignUp(name, password);
-        await refresh();
+        // load the saved profile first (one retry on a slow connection), so the next screens are filled in
+        if (!(await refresh())) await refresh();
         router.replace('/about');
         return;
       }
