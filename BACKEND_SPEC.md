@@ -2,12 +2,15 @@
 
 HackGT 13 · hacking ends **Sun Sep 27, 8:00 AM** · 4-person team
 
-> **For the coding agent reading this:** you are building the **backend** for Window: the Supabase database, the FastAPI AI server, and the app's data layer (`app/lib/real.ts` and helpers). Another teammate (Sid) is building every app screen **against the exact contract in section 7**. The hardware pair is building two Raspberry Pi windows **against section 10**. Match those contracts exactly. If you think a contract needs to change, stop and tell your human first. Sid's screens and the Pis depend on it.
+> **For the coding agent reading this:** you are building the **backend** for Window: the Supabase database, the FastAPI AI server, and the app's data layer (`app/src/lib/real.ts` and helpers). Another teammate (Sid) is building every app screen **against the exact contract in section 7**. The hardware pair is building two Raspberry Pi windows **against section 10**. Match those contracts exactly. If you think a contract needs to change, stop and tell your human first. Sid's screens and the Pis depend on it.
 >
-> **Files you own:** `server/**`, `supabase/**`, `app/lib/real.ts`, `app/lib/supabase.ts`, `app/lib/api.ts`, `app/lib/notifications.ts`
-> **Do not edit:** `app/app/**` (screens), `app/components/**`, `app/lib/mock.ts`, `app/lib/theme.ts`, `hardware/**`, `app/package.json` (all libraries are already installed; ask before adding one)
-> **Shared, change only after agreeing:** `app/lib/types.ts`, `app/lib/data.ts`
+> **Files you own:** `server/**`, `supabase/**`, `app/src/lib/real.ts`, `app/src/lib/supabase.ts`, `app/src/lib/api.ts`, `app/src/lib/notifications.ts`
+> **Do not edit:** `app/src/app/**` (screens), `app/src/components/**`, `app/src/lib/mock.ts`, `app/src/lib/theme.ts`, `hardware/**`, `app/package.json` (all libraries are already installed; ask before adding one)
+> **Shared, change only after agreeing:** `app/src/lib/types.ts`, `app/src/lib/data.ts`
 > **Never commit keys.** `.env` files are gitignored. Commit messages are plain descriptions, with no AI co-author trailers.
+
+## Changelog (newest first)
+- **Sat 2:45 AM · Sid:** Expo SDK 57's template puts code in `app/src/`. Screens live in `app/src/app/`, components in `app/src/components/`, and shared code in **`app/src/lib/`** (so `types.ts`, `data.ts`, `real.ts`, `supabase.ts`, `api.ts` and `notifications.ts` are all in `app/src/lib/`). Every path in this spec now uses these.
 
 ---
 
@@ -69,9 +72,9 @@ Screens (built by Sid): Welcome, Sign in, About you, Interests, Dreams, Matching
 
 ```
 /app                  Expo app (Sid: screens; you: lib/real.ts etc.)
-  app/                screens (Expo Router). DON'T EDIT
-  components/         DON'T EDIT
-  lib/
+  src/app/            screens (Expo Router). DON'T EDIT
+  src/components/     DON'T EDIT
+  src/lib/
     types.ts          SHARED contract (section 7)
     data.ts           SHARED contract (section 7), switches mock ↔ real
     config.ts         export const USE_MOCKS = true | false
@@ -229,7 +232,7 @@ The server writes `dubs/*` with the service_role key, which skips RLS.
 
 ## 7. App ↔ backend contract (Sid codes screens against this, you implement it in `real.ts`)
 
-### `app/lib/types.ts`
+### `app/src/lib/types.ts`
 ```ts
 export type Lang = string; // ISO 639-1
 
@@ -284,7 +287,7 @@ export type SendWindowInput = {
 };
 ```
 
-### `app/lib/data.ts` (every function the screens call)
+### `app/src/lib/data.ts` (every function the screens call)
 ```ts
 import { USE_MOCKS } from './config';
 import * as mock from './mock';
@@ -428,7 +431,7 @@ partner = sb.table("profiles").select("*").eq("id", PARTNER_ID).single().execute
    - `onboarded = true`
    - `dream_places` includes **Atlanta**
    - interests overlapping Sid's: film photography, ramen, coffee, …
-   - city-level lat/lng/tz, matching `app/lib/cities.ts`
+   - city-level lat/lng/tz, matching `app/src/lib/cities.ts`
    - `interest_vec` embedded
 3. Aiko's history: upload 8–12 free Unsplash Kyoto photos to `media/{aiko_id}/`. Insert them as windows **from Aiko to Sid** once Sid's match exists, with past `local_date`s, and run each through the pipeline, so Wall and Passport have content.
 4. The team is open about this: in the demo, teammates play the local partners.
