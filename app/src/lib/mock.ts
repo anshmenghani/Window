@@ -2,7 +2,7 @@
 // Same functions as real.ts (see data.ts). Edit freely: only Sid uses this file.
 import * as Crypto from 'expo-crypto';
 import type {
-  Profile, Match, MatchResult, WindowItem, WindowProgress, Knock, ItineraryStop, SendWindowInput,
+  Profile, Match, MatchResult, WindowItem, WindowProgress, Knock, ItineraryStop, SendWindowInput, LocationCheck,
 } from './types';
 
 // Start the app already logged in as the demo Sid (skips Welcome + onboarding)?
@@ -16,7 +16,7 @@ const demoMe: Profile = {
   id: 'me', name: 'Sid', languages: ['en', 'hi'],
   home_city: 'Atlanta', country: 'United States', tz: 'America/New_York', lat: 33.75, lng: -84.39,
   interests: ['Film photography', 'Ramen', 'Coffee'], dream_places: ['Kyoto', 'Lisbon', 'Seoul'],
-  mutual_dreams: true, hide_contact: true, onboarded: true,
+  mutual_dreams: true, hide_contact: true, onboarded: true, location_verified: true,
 };
 
 const blankMe: Profile = {
@@ -31,19 +31,19 @@ const aiko: Profile = {
   id: 'aiko', name: 'Aiko', languages: ['ja'],
   home_city: 'Kyoto', country: 'Japan', tz: 'Asia/Tokyo', lat: 35.01, lng: 135.77,
   interests: ['Film photography', 'Ramen', 'Coffee', 'Cycling'], dream_places: ['Atlanta', 'Paris'],
-  mutual_dreams: true, hide_contact: true, onboarded: true,
+  mutual_dreams: true, hide_contact: true, onboarded: true, location_verified: true,
 };
 const ines: Profile = {
   id: 'ines', name: 'Inês', languages: ['pt'],
   home_city: 'Lisbon', country: 'Portugal', tz: 'Europe/Lisbon', lat: 38.72, lng: -9.14,
   interests: ['Coffee', 'Architecture', 'Music'], dream_places: ['Atlanta'],
-  mutual_dreams: true, hide_contact: true, onboarded: true,
+  mutual_dreams: true, hide_contact: true, onboarded: true, location_verified: true,
 };
 const minjun: Profile = {
   id: 'minjun', name: 'Minjun', languages: ['ko'],
   home_city: 'Seoul', country: 'South Korea', tz: 'Asia/Seoul', lat: 37.57, lng: 126.98,
   interests: ['Gaming', 'Street food', 'Film photography'], dream_places: ['New York', 'Atlanta'],
-  mutual_dreams: true, hide_contact: true, onboarded: true,
+  mutual_dreams: true, hide_contact: true, onboarded: true, location_verified: true,
 };
 
 // Locals who could become your pen pal
@@ -124,9 +124,20 @@ export async function getMyProfile(): Promise<Profile | null> {
 }
 export async function saveProfile(p: Partial<Profile>): Promise<void> {
   await wait(200);
-  me = { ...me, ...p };
+  const { location_verified: _ignored, ...rest } = p; // only the server can verify
+  const cityChanged = rest.home_city !== undefined && rest.home_city !== me.home_city;
+  me = { ...me, ...rest, ...(cityChanged ? { location_verified: false } : {}) };
 }
 export async function registerPushToken(): Promise<void> {}
+export async function verifyLocation(lat: number, lng: number): Promise<LocationCheck> {
+  await wait(700);
+  const toRad = (x: number) => (x * Math.PI) / 180;
+  const h = Math.sin(toRad(me.lat - lat) / 2) ** 2 + Math.cos(toRad(lat)) * Math.cos(toRad(me.lat)) * Math.sin(toRad(me.lng - lng) / 2) ** 2;
+  const distance_km = Math.round(2 * 6371 * Math.asin(Math.sqrt(h)));
+  const verified = distance_km <= 80;
+  if (verified) me = { ...me, location_verified: true };
+  return { verified, distance_km };
+}
 
 // ---------- matching (ONE pen pal at a time) ----------
 export async function findMatches(): Promise<MatchResult[]> {

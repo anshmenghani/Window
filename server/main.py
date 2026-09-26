@@ -101,6 +101,31 @@ def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
     return [{"city": city, "status": "matched", "match": {**inserted, "partner": partner}}]
 
 
+VERIFY_RADIUS_KM = 80
+
+
+class LocationRequest(BaseModel):
+    lat: float
+    lng: float
+
+
+@app.post("/verify-location")
+def verify_location(body: LocationRequest, user_id: str = Depends(require_user)) -> dict[str, Any]:
+    """Check the phone is near the chosen home city. Coordinates are never stored or logged."""
+    me = profile(user_id)
+    if me.get("lat") is None or me.get("lng") is None:
+        raise HTTPException(status_code=409, detail="Pick your home city first.")
+    if not (-90 <= body.lat <= 90 and -180 <= body.lng <= 180):
+        raise HTTPException(status_code=422, detail="That location doesn't look right.")
+    distance = ai.distance_km(body.lat, body.lng, float(me["lat"]), float(me["lng"]))
+    verified = distance <= VERIFY_RADIUS_KM
+    if verified:
+        get_supabase().table("profiles").update(
+            {"location_verified": True, "location_verified_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("id", user_id).execute()
+    return {"verified": verified, "distance_km": round(distance)}
+
+
 class ProcessRequest(BaseModel):
     window_id: UUID
 

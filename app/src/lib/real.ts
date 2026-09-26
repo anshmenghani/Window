@@ -2,7 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { api } from './api';
 import { getPushToken } from './notifications';
 import { supabase } from './supabase';
-import type { ItineraryStop, Knock, Match, MatchResult, Profile, SendWindowInput, WindowItem, WindowProgress, WindowStatus } from './types';
+import type { ItineraryStop, Knock, LocationCheck, Match, MatchResult, Profile, SendWindowInput, WindowItem, WindowProgress, WindowStatus } from './types';
 
 const fail = (error: { message?: string; code?: string } | null, fallback: string): never => {
   throw new Error(error?.message || fallback);
@@ -60,6 +60,11 @@ export async function registerPushToken(): Promise<void> {
     // Stored in push_tokens (only you can read it), not on the profile your pen pal can see.
     await supabase.from('push_tokens').upsert({ user_id: id, token, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   } catch { /* Push is optional; sign-in and onboarding must continue. */ }
+}
+
+// Sends the phone's position once; the server checks it against the home city and never stores it.
+export async function verifyLocation(lat: number, lng: number): Promise<LocationCheck> {
+  return api<LocationCheck>('/verify-location', { lat, lng });
 }
 
 export async function findMatches(): Promise<MatchResult[]> {

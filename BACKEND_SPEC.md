@@ -10,6 +10,12 @@ HackGT 13 · hacking ends **Sun Sep 27, 8:00 AM** · 4-person team
 > **Never commit keys.** `.env` files are gitignored. Commit messages are plain descriptions, with no AI co-author trailers.
 
 ## Changelog (newest first)
+- **Sat 5:15 AM · Sid: LOCATION VERIFICATION.** New onboarding step 2 of 4 (`/verify`, after About you): the phone sends its position **once** to the server, which checks it's within **80 km** of the chosen home city.
+  - **Schema (re-run `schema.sql`):** `profiles.location_verified boolean default false`, `profiles.location_verified_at timestamptz`. A trigger lets **only the service role** set these; any client update keeps the old values, and **changing `home_city` resets them**.
+  - **Server:** `POST /verify-location {lat, lng}` → `{verified, distance_km}`. Coordinates are never stored or logged; only the flag is saved. `ai.distance_km` is the haversine helper.
+  - **Contract:** `Profile.location_verified?: boolean`, new `LocationCheck = {verified, distance_km}`, and `verifyLocation(lat, lng)` in `data.ts` / `real.ts` / `mock.ts`.
+  - **Demo:** `ALLOW_SKIP_LOCATION_CHECK = true` in `app/src/lib/config.ts` shows "Skip for now (demo)". `seed.py` marks personas `location_verified: true` (they're played by teammates in Atlanta).
+  - **UI:** "✓ Verified local" on the match postcard and on the You tab (unverified users get a "Verify now" link).
 - **Sat 4:40 AM · Sid (fixes from reviewing Isha's backend):**
   - **Re-run `supabase/schema.sql`** in the SQL editor (it's safe to re-run). It adds a **`push_tokens`** table (`user_id` pk, `token`, `updated_at`; only you can read or write your own row), moves any existing `profiles.expo_push_token` values into it, and **tightens `profiles` reads to yourself + people you're matched with.** Matching runs on the server with the service-role key, so the app never lists strangers. The Pi still reads its partner's profile (they're matched).
   - `registerPushToken` (real.ts) now upserts into `push_tokens`. `/hooks/push` reads the token from `push_tokens` (falls back to the old profile column).

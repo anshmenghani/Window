@@ -119,6 +119,34 @@ create policy p_ins on public.profiles for insert to authenticated with check (i
 drop policy if exists p_upd on public.profiles;
 create policy p_upd on public.profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
+-- Location verification: the phone sends its position ONCE to POST /verify-location.
+-- The server checks it is near the chosen home city, sets these two columns, and discards the coordinates.
+alter table public.profiles add column if not exists location_verified boolean not null default false;
+alter table public.profiles add column if not exists location_verified_at timestamptz;
+
+-- Only the server (service role) may mark someone verified. Changing your home city resets it.
+create or replace function public.protect_location_verification() returns trigger
+language plpgsql as $$
+begin
+  if coalesce(auth.role(), '') <> 'service_role' then
+    if tg_op = 'INSERT' then
+      new.location_verified := false;
+      new.location_verified_at := null;
+    else
+      new.location_verified := old.location_verified;
+      new.location_verified_at := old.location_verified_at;
+    end if;
+  end if;
+  if tg_op = 'UPDATE' and new.home_city is distinct from old.home_city then
+    new.location_verified := false;
+    new.location_verified_at := null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists protect_location_verification on public.profiles;
+create trigger protect_location_verification before insert or update on public.profiles
+for each row execute function public.protect_location_verification();
+
 alter table public.push_tokens enable row level security;
 drop policy if exists pt_read on public.push_tokens;
 create policy pt_read on public.push_tokens for select to authenticated using (user_id = auth.uid());

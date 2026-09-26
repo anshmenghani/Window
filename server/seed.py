@@ -32,6 +32,8 @@ def main() -> None:
             "mutual_dreams": persona.get("mutual_dreams", True),
             "hide_contact": persona.get("hide_contact", True),
             "interest_vec": ai.embed_interests(persona.get("interests") or []),
+            # Demo personas are played by teammates who aren't really in these cities
+            "location_verified": persona.get("location_verified", True),
         }
         sb.table("profiles").upsert(record).execute()
         print(f"Seeded {persona['name']} ({persona['home_city']})")

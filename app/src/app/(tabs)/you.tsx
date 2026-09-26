@@ -81,6 +81,13 @@ export default function You() {
           <T variant="small" style={{ fontSize: 14 }}>
             {profile.home_city} · {profile.languages.map(languageName).join(', ')}
           </T>
+          {profile.location_verified ? (
+            <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.ok, marginTop: 2 }}>✓ Verified local</Text>
+          ) : (
+            <Pressable onPress={() => router.push('/verify')}>
+              <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.duskDeep, marginTop: 2 }}>Not verified yet · Verify now</Text>
+            </Pressable>
+          )}
         </View>
       </View>
 

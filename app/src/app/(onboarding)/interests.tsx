@@ -30,7 +30,7 @@ export default function Interests() {
 
   return (
     <Screen scroll gap={24} style={{ paddingHorizontal: 28 }}>
-      <StepHeader step={2} onBack={() => router.back()} />
+      <StepHeader step={3} onBack={() => router.back()} />
       <View style={{ gap: 8 }}>
         <T variant="title">What do you love?</T>
         <T variant="muted">Pick at least 3. Your window partner will share some of them.</T>

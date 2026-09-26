@@ -5,6 +5,7 @@ export type Profile = {
   home_city: string; country: string; tz: string; lat: number; lng: number;
   interests: string[]; dream_places: string[];
   mutual_dreams: boolean; hide_contact: boolean; onboarded: boolean;
+  location_verified?: boolean; // set only by the server after a one-time location check
 };
 
 export type Match = {
@@ -29,3 +30,5 @@ export type SendWindowInput = {
   id: string; matchId: string; recipientId: string; photoUri: string; audioUri?: string;
   caption: string; spot?: string; localDate: string;
 };
+
+export type LocationCheck = { verified: boolean; distance_km: number };

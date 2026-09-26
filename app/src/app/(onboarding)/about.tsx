@@ -36,7 +36,7 @@ export default function About() {
         home_city: city.name, country: city.country, tz: city.tz, lat: city.lat, lng: city.lng,
       });
       await refresh();
-      router.push('/interests');
+      router.push('/verify');
     } finally {
       setBusy(false);
     }

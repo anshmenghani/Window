@@ -25,6 +25,15 @@ def cosine(a: list[float], b: list[float]) -> float:
     return float(np.dot(av, bv) / denom) if denom else 0.0
 
 
+def distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    import math
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(h))
+
+
 def fit_reason(me: dict[str, Any], them: dict[str, Any], shared: list[str], mutual: bool) -> str:
     request = f"Write one warm sentence of at most 25 words telling {me.get('name') or 'them'} why they and {them.get('name') or 'their match'} fit. Mention 2–3 genuinely shared interests from {shared}." + (f" Mention that {them.get('name') or 'they'} dreams of visiting {me.get('home_city')}." if mutual else "") + " Refer to the match by first name. No emojis."
     result = client().chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": request}], max_tokens=80)

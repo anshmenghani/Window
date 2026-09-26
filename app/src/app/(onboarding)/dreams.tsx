@@ -44,7 +44,7 @@ export default function Dreams() {
 
   return (
     <Screen scroll gap={18} style={{ paddingHorizontal: 28 }}>
-      <StepHeader step={3} onBack={() => router.back()} />
+      <StepHeader step={4} onBack={() => router.back()} />
       <View style={{ gap: 8 }}>
         <T variant="title">Where do you dream of going?</T>
         <T variant="muted">Pick up to 3. We&apos;ll match you with one person who lives in one of them.</T>

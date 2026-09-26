@@ -59,6 +59,12 @@
         {
           "photosPermission": "Window lets you pick today's photo from your library."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Window checks once that you really live in your home city. Your exact location is never saved or shared."
+        }
       ]
     ],
     "experiments": {

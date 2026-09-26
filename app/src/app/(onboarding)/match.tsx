@@ -77,6 +77,9 @@ export default function MatchReveal() {
           <View>
             <Text style={{ fontFamily: fonts.display, fontSize: 26, color: colors.ink }}>{p.name}</Text>
             <T variant="small" style={{ fontSize: 14 }}>{p.home_city}, {p.country}</T>
+            {p.location_verified ? (
+              <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.ok, marginTop: 2 }}>✓ Verified local</Text>
+            ) : null}
           </View>
         </View>
 

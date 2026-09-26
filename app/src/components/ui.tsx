@@ -189,7 +189,7 @@ const input = StyleSheet.create({
 });
 
 // ---------- onboarding step bars ----------
-export function Steps({ step, total = 3 }: { step: number; total?: number }) {
+export function Steps({ step, total = 4 }: { step: number; total?: number }) {
   return (
     <View style={{ flexDirection: 'row', gap: 6 }} accessibilityLabel={`Step ${step} of ${total}`}>
       {Array.from({ length: total }, (_, i) => (
