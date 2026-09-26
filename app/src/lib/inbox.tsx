@@ -6,7 +6,7 @@ import Animated, { SlideInUp, SlideOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { getMatches, sendKnock, watchInbox } from './data';
+import { getMatches, watchInbox } from './data';
 import { useSession } from './session';
 import { colors, fonts, shadow } from './theme';
 import type { Knock, WindowItem } from './types';
@@ -115,12 +115,8 @@ export function InboxProvider({ children }: { children: ReactNode }) {
             </View>
             <Pressable
               onPress={() => {
-                if (banner.kind === 'knock') {
-                  sendKnock(banner.knock.from_user, banner.knock.pattern).catch(() => {});
-                  playKnockHaptics(banner.knock.pattern);
-                } else {
-                  router.push({ pathname: '/window/[id]', params: { id: banner.window.id } });
-                }
+                // Knocks are only sent from the physical windows, so a knock banner just closes.
+                if (banner.kind === 'window') router.push({ pathname: '/window/[id]', params: { id: banner.window.id } });
                 setBanner(null);
               }}
               style={({ pressed }) => [
@@ -129,7 +125,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
               ]}
             >
               <Text style={{ fontFamily: fonts.bold, fontSize: 13, color: colors.ink }}>
-                {banner.kind === 'knock' ? 'Knock back' : 'Open'}
+                {banner.kind === 'knock' ? 'OK' : 'Open'}
               </Text>
             </Pressable>
           </View>

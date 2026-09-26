@@ -19,9 +19,8 @@ What happens once it's set up:
 
 | You do this | This happens |
 |---|---|
-| Knock on Sid's wooden window | Aiko's window buzzes the same rhythm **and** Aiko's phone shows "Sid knocked · on the window in Atlanta" (the crane on her sill hops) |
-| Tap a rhythm on the knock rail in Sid's app | Aiko's window buzzes it |
-| "Knock back" from the banner | The other window buzzes the same rhythm back |
+| Knock on Sid's wooden window | Aiko's window buzzes the same rhythm **and** Aiko's phone shows "Sid knocked · on the window in Atlanta" (the crane on her sill hops and Sid's window on her sill rattles) |
+| Knock back on Aiko's wooden window | Sid's window buzzes it, and Sid's phone shows the banner |
 | Aiko changes her city in the app | Sid's window light follows her new time zone |
 | Pause the pen pals in the You tab | The windows stop knocking each other (and the app), until you resume |
 
@@ -84,7 +83,7 @@ which time zone your light is showing, and a **Knock on my window** button that 
 window knock three times (it doesn't reach your pen pal). Then:
 
 1. Knock on window A → window B buzzes, and Aiko's phone shows the knock banner.
-2. On Aiko's phone, tap a rhythm on the knock rail → window A buzzes.
+2. Knock on window B → window A buzzes, and Sid's phone shows the banner.
 3. Look at the Pi logs: `[light] partner timezone=Asia/Tokyo` on A, `America/New_York` on B.
 
 ## Demo notes
@@ -118,6 +117,8 @@ select pair_id, side, user_id, timezone from public.window_sides order by pair_i
   `source = 'window'`, converting gaps (`[0,180,520]`) to times since the first knock (`[0,180,700]`), at most 10.
 - `app_knock_to_window` (after insert on `knocks`): copies `source = 'app'` knocks into `window_knocks` on the
   sender's side, converting back to gaps. A setting stops the copy from bouncing back into the app.
+  (The app no longer sends knocks: knocking happens only on the physical windows. This stays in place in case
+  an app knock is ever added back.)
 - `window_follow_profile_tz` (after update of `profiles.tz`): keeps `window_sides.timezone` in step.
 - Connection status: the bridge re-defines Ansh's `window_get_partner` (same inputs and output) to also set
   `window_sides.last_seen_at`, because each Pi calls it every 30 s. So **run the bridge after Ansh's schema**;

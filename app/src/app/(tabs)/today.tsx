@@ -1,5 +1,6 @@
 // Today: a windowsill. Their window, large; yours, smaller, waiting beside it.
-// Below: the knock rail and a paper strip showing their sky right now.
+// Below: today's shared prompt and a paper strip showing their sky right now.
+// (Knocks only come from the physical windows; when one arrives, the crane hops and their window rattles.)
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { SlideInRight, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming, Easing } from 'react-native-reanimated';
@@ -11,7 +12,6 @@ import { Screen } from '@/components/Screen';
 import { Arch } from '@/components/Arch';
 import { CityScene } from '@/components/CityScene';
 import { SkyCard } from '@/components/SkyCard';
-import { KnockPad } from '@/components/KnockPad';
 import { TAB_BAR_SPACE } from '@/components/TabBar';
 import { CameraIcon } from '@/components/Icons';
 import { Crane } from '@/components/Crane';
@@ -34,7 +34,7 @@ export default function Today() {
   const { profile } = useSession();
   const { version, knocks } = useInbox();
   const [cranePulse, setCranePulse] = useState(0);
-  const [rattle, setRattle] = useState(0); // their window rattles in its frame when you knock
+  const [rattle, setRattle] = useState(0); // their window rattles in its frame when they knock
   const [wallTo, setWallTo] = useState(0); // where the wall ends and the sill begins
   const { width: screenW } = useWindowDimensions();
   const [matches, setMatches] = useState<Match[] | null>(null);
@@ -62,7 +62,9 @@ export default function Today() {
   }, [version, load]);
   // someone knocked on your window: the crane on the sill startles
   useEffect(() => {
-    if (knocks) setCranePulse((n) => n + 1);
+    if (!knocks) return;
+    setCranePulse((n) => n + 1);
+    setRattle((n) => n + 1);
   }, [knocks]);
 
   const onRefresh = async () => {
@@ -177,13 +179,6 @@ export default function Today() {
             />
           ) : null}
 
-          <KnockPad
-            partner={main.partner}
-            onSent={() => {
-              setCranePulse((n) => n + 1);
-              setRattle((n) => n + 1);
-            }}
-          />
           <SkyCard person={main.partner} />
         </>
       ) : null}
