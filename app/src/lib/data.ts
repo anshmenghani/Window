@@ -1,0 +1,10 @@
+import { USE_MOCKS } from './config';
+import * as mock from './mock';
+import * as real from './real';
+const src = USE_MOCKS ? mock : real;
+export const {
+  signUp, signIn, signOut, getMyProfile, saveProfile, registerPushToken,
+  findMatches, getMatches, setMatchStatus,
+  newWindowId, sendWindow, watchWindow, getToday, getWindow, saveWindow, getWall,
+  watchInbox, sendKnock, getItinerary, reportUser,
+} = src;

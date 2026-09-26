@@ -1,17 +1,20 @@
-import { Text, View, StyleSheet } from "react-native";
+// Decides where the app opens: Welcome (logged out), onboarding (not finished), or Today.
+import { ActivityIndicator, View } from 'react-native';
+import { Redirect } from 'expo-router';
+import { useSession } from '@/lib/session';
+import { colors } from '@/lib/theme';
 
 export default function Index() {
-  return (
-    <View style={styles.container}>
-      <Text>Edit src/app/index.tsx to edit this screen.</Text>
-    </View>
-  );
-}
+  const { profile, loading } = useSession();
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mist }}>
+        <ActivityIndicator color={colors.dusk} />
+      </View>
+    );
+  }
+  if (!profile) return <Redirect href="/welcome" />;
+  if (!profile.onboarded) return <Redirect href="/about" />;
+  return <Redirect href="/today" />;
+}

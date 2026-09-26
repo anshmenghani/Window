@@ -1,0 +1,47 @@
+// Page wrapper: safe-area padding, background color, optional scrolling and keyboard handling.
+import { ReactNode } from 'react';
+import { KeyboardAvoidingView, Platform, RefreshControlProps, ScrollView, StyleProp, View, ViewStyle } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { colors, gutter } from '@/lib/theme';
+
+type Props = {
+  children: ReactNode;
+  scroll?: boolean;
+  dark?: boolean;
+  bg?: string;
+  padBottom?: number; // extra bottom space (e.g. for the floating tab bar)
+  gap?: number;
+  style?: StyleProp<ViewStyle>;
+  refreshControl?: React.ReactElement<RefreshControlProps>;
+  edges?: ('top' | 'bottom')[];
+};
+
+export function Screen({ children, scroll, dark, bg, padBottom = 0, gap = 18, style, refreshControl, edges = ['top', 'bottom'] }: Props) {
+  const background = bg ?? (dark ? colors.night : colors.mist);
+  const inner: StyleProp<ViewStyle> = [{ paddingHorizontal: gutter, paddingTop: 12, paddingBottom: 16 + padBottom, gap }, style];
+  return (
+    <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: background }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {scroll ? (
+          <ScrollView
+            contentContainerStyle={[{ flexGrow: 1 }, inner]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            refreshControl={refreshControl}
+          >
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={[{ flex: 1 }, inner]}>{children}</View>
+        )}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+/** Pushes whatever comes after it to the bottom of the screen. */
+export function Spacer() {
+  return <View style={{ flex: 1, minHeight: 12 }} />;
+}
