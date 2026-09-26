@@ -12,6 +12,7 @@ import { CityScene } from '@/components/CityScene';
 import { WindowLogo } from '@/components/Icons';
 import { Button, T } from '@/components/ui';
 import { colors, fonts, shadow } from '@/lib/theme';
+import { APP_VERSION } from '@/lib/config';
 import { findCity } from '@/lib/cities';
 import { timeIn } from '@/lib/time';
 
@@ -68,6 +69,7 @@ export default function Welcome() {
       <View style={{ gap: 4 }}>
         <Button title="Open your window" onPress={() => router.push({ pathname: '/sign-in', params: { mode: 'signup' } })} />
         <Button variant="ghost" title="I already have an account" onPress={() => router.push({ pathname: '/sign-in', params: { mode: 'login' } })} />
+        <T variant="small" style={{ textAlign: 'center', opacity: 0.6, fontSize: 11 }}>version · {APP_VERSION}</T>
       </View>
     </Screen>
   );

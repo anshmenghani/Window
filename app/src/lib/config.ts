@@ -10,6 +10,9 @@ export const ALLOW_SKIP_LOCATION_CHECK = true;
 // If Supabase ever rejects this domain as invalid, change it here and nowhere else.
 export const USERNAME_EMAIL_DOMAIN = 'users.windowapp.dev';
 
+// When this copy of the app was published (set by the publish command). "dev" when run from a laptop.
+export const APP_VERSION = process.env.EXPO_PUBLIC_BUILD_TIME || 'dev';
+
 // Demo accounts: "signing up" again with one of these usernames (and its usual password) signs in
 // and replays the whole sign-up flow, keeping their pen pal and letters. Every other username is normal.
 export const DEMO_ACCOUNTS = ['sid', 'isha'];

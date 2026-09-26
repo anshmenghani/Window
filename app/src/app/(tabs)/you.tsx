@@ -7,7 +7,7 @@ import { TAB_BAR_SPACE } from '@/components/TabBar';
 import { BellIcon, LocationIcon, LockIcon, ShieldIcon } from '@/components/Icons';
 import { Button, Chip, Ledger, T, TextLink } from '@/components/ui';
 import { getMatches, getNotifications, getPhysicalWindow, myUsername, reportUser, resetDemo, saveProfile, setMatchStatus, setNotifications, signOut, testNotification, testPhysicalWindow } from '@/lib/data';
-import { DEMO_ACCOUNTS } from '@/lib/config';
+import { APP_VERSION, DEMO_ACCOUNTS } from '@/lib/config';
 import { useSession } from '@/lib/session';
 import { languageName } from '@/lib/cities';
 import { dayNumber, timeAgo } from '@/lib/time';
@@ -191,6 +191,7 @@ export default function You() {
           router.replace('/welcome');
         }}
       />
+      <T variant="small" style={{ opacity: 0.6, fontSize: 11 }}>version · {APP_VERSION}</T>
 
       <Modal visible={reporting} animationType="slide" transparent onRequestClose={closeReport}>
         <Pressable style={{ flex: 1, backgroundColor: 'rgba(46,42,38,0.45)' }} onPress={closeReport} />
