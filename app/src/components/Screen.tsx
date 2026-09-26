@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform, RefreshControlProps, ScrollView, StyleP
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { colors, gutter } from '@/lib/theme';
+import { PaperGrain } from './materials';
 
 type Props = {
   children: ReactNode;
@@ -15,13 +16,16 @@ type Props = {
   style?: StyleProp<ViewStyle>;
   refreshControl?: React.ReactElement<RefreshControlProps>;
   edges?: ('top' | 'bottom')[];
+  /** a faint paper surface; only for the windowsill and passport, not utility screens */
+  textured?: boolean;
 };
 
-export function Screen({ children, scroll, dark, bg, padBottom = 0, gap = 18, style, refreshControl, edges = ['top', 'bottom'] }: Props) {
+export function Screen({ children, scroll, dark, bg, padBottom = 0, gap = 18, style, refreshControl, edges = ['top', 'bottom'], textured }: Props) {
   const background = bg ?? (dark ? colors.night : colors.mist);
   const inner: StyleProp<ViewStyle> = [{ paddingHorizontal: gutter, paddingTop: 12, paddingBottom: 16 + padBottom, gap }, style];
   return (
     <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: background }}>
+      {textured && !dark ? <PaperGrain opacity={0.35} /> : null}
       <StatusBar style={dark ? 'light' : 'dark'} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {scroll ? (

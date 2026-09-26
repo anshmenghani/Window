@@ -1,49 +1,76 @@
-// "Knock on Aiko's window": tap a rhythm, and after a short pause it's sent.
-// Their physical window (or phone) plays the same rhythm back.
+// The knock rail: a strip of walnut with a brass knocker. Tap a rhythm; after a pause it's sent,
+// and their window (or phone) knocks the same rhythm back. Taps show as ink marks on the rail.
 import { useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { sendKnock } from '@/lib/data';
-import { colors, fonts, radius } from '@/lib/theme';
+import { colors, fonts, motion, radius, shadow } from '@/lib/theme';
 import type { Profile } from '@/lib/types';
 import { KnockIcon } from './Icons';
+import { Brass, Wood } from './materials';
 
 const PAUSE_MS = 1200; // silence that ends a knock pattern
 const MAX_KNOCKS = 10;
+const LONG_GAP = 380; // gaps longer than this show as a dash
+
+/** Turn tap times into marks: a dot per knock, a dash for a long pause between knocks. */
+export function rhythmMarks(pattern: number[]): ('dot' | 'gap')[] {
+  const marks: ('dot' | 'gap')[] = [];
+  pattern.forEach((t, i) => {
+    if (i > 0 && t - pattern[i - 1] > LONG_GAP) marks.push('gap');
+    marks.push('dot');
+  });
+  return marks;
+}
+
+export function RhythmMarks({ pattern, color = colors.postcard }: { pattern: number[]; color?: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+      {rhythmMarks(pattern).map((m, i) => (
+        <Animated.View
+          key={i}
+          entering={FadeIn.duration(motion.press)}
+          style={m === 'dot' ? { width: 7, height: 7, borderRadius: 4, backgroundColor: color } : { width: 14, height: 2, borderRadius: 1, backgroundColor: color, opacity: 0.6 }}
+        />
+      ))}
+    </View>
+  );
+}
 
 export function KnockPad({ partner }: { partner: Profile }) {
   const taps = useRef<number[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [state, setState] = useState<'idle' | 'tapping' | 'sent' | 'error'>('idle');
   const [errorText, setErrorText] = useState('');
-  const [count, setCount] = useState(0);
-  const shake = useSharedValue(0);
-  const iconStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${shake.value}deg` }] }));
+  const [pattern, setPattern] = useState<number[]>([]);
+  const inset = useSharedValue(0);
+  const railStyle = useAnimatedStyle(() => ({ transform: [{ translateY: inset.value }, { scale: 1 - inset.value * 0.004 }] }));
 
   const send = () => {
     const first = taps.current[0];
-    const pattern = taps.current.map((t) => t - first);
+    const p = taps.current.map((t) => t - first);
     taps.current = [];
-    setCount(0);
     setState('sent');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    sendKnock(partner.id, pattern)
-      .then(() => setTimeout(() => setState('idle'), 2200))
+    sendKnock(partner.id, p)
+      .then(() => setTimeout(() => { setState('idle'); setPattern([]); }, 2400))
       .catch((e) => {
         // e.g. the window is paused: say so instead of silently resetting
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setErrorText(e instanceof Error ? e.message : 'Your knock didn\'t go through. Try again.');
         setState('error');
-        setTimeout(() => setState('idle'), 3500);
+        setTimeout(() => { setState('idle'); setPattern([]); }, 3500);
       });
   };
 
   const onTap = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    shake.value = withSequence(withTiming(-14, { duration: 60 }), withTiming(0, { duration: 90 }));
-    taps.current.push(Date.now());
-    setCount(taps.current.length);
+    inset.value = withSequence(withTiming(2, { duration: 60 }), withTiming(0, { duration: motion.press }));
+    const now = Date.now();
+    taps.current.push(now);
+    const first = taps.current[0];
+    setPattern(taps.current.map((t) => t - first));
     setState('tapping');
     if (timer.current) clearTimeout(timer.current);
     if (taps.current.length >= MAX_KNOCKS) send();
@@ -51,28 +78,27 @@ export function KnockPad({ partner }: { partner: Profile }) {
   };
 
   const hint =
-    state === 'tapping' ? `${'• '.repeat(count).trim()}  keep going, or pause to send`
-      : state === 'sent' ? `Sent! ${partner.name}'s window is knocking`
+    state === 'tapping' ? 'keep knocking, or pause to send'
+      : state === 'sent' ? `sent · ${partner.name}'s window is knocking`
         : state === 'error' ? errorText
-          : `Tap a rhythm. ${partner.name}'s window knocks it back.`;
+          : `knock on ${partner.name}'s window`;
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Knock on ${partner.name}'s window`}
-      onPress={onTap}
-      style={({ pressed }) => [
-        { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: radius.lg, backgroundColor: state === 'sent' ? colors.okBg : state === 'error' ? '#FBE4E2' : colors.honey },
-        pressed && { transform: [{ scale: 0.98 }] },
-      ]}
-    >
-      <Animated.View style={[{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.light, alignItems: 'center', justifyContent: 'center' }, iconStyle]}>
-        <KnockIcon />
+    <Pressable accessibilityRole="button" accessibilityLabel={`Knock on ${partner.name}'s window`} onPress={onTap}>
+      <Animated.View style={[{ height: 62, borderRadius: radius.md, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 10 }, shadow.card, railStyle]}>
+        <Wood />
+        {/* a groove along the rail */}
+        <View style={{ position: 'absolute', left: 64, right: 12, bottom: 7, height: 2, backgroundColor: 'rgba(20,10,4,0.35)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,225,190,0.15)' }} />
+        <Brass size={42}>
+          <KnockIcon color="#5A3E14" size={20} />
+        </Brass>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text numberOfLines={2} style={{ fontFamily: fonts.semibold, fontSize: 14, color: state === 'error' ? '#FFD2C2' : colors.postcard }}>{hint}</Text>
+          {pattern.length ? <RhythmMarks pattern={pattern} color={state === 'sent' ? colors.amber : colors.postcard} /> : (
+            <Text style={{ fontFamily: fonts.body, fontSize: 11, color: 'rgba(255,249,237,0.7)' }}>tap a rhythm · they&apos;ll hear it</Text>
+          )}
+        </View>
       </Animated.View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.ink }}>Knock on {partner.name}&apos;s window</Text>
-        <Text style={{ fontFamily: fonts.body, fontSize: 13, color: state === 'sent' ? colors.ok : state === 'error' ? colors.danger : colors.honeyText }}>{hint}</Text>
-      </View>
     </Pressable>
   );
 }

@@ -1,9 +1,11 @@
-// Today (home): the daily ritual. One glance tells you if their window arrived.
+// Today: a windowsill. Their window, large; yours, smaller, waiting beside it.
+// Below: the knock rail and a paper strip showing their sky right now.
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, Text, View } from 'react-native';
-import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import { Pressable, RefreshControl, Text, useWindowDimensions, View } from 'react-native';
+import Animated, { SlideInRight, useAnimatedStyle, useSharedValue, withDelay, withTiming, Easing } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { Arch } from '@/components/Arch';
@@ -11,14 +13,15 @@ import { CityScene } from '@/components/CityScene';
 import { SkyCard } from '@/components/SkyCard';
 import { KnockPad } from '@/components/KnockPad';
 import { TAB_BAR_SPACE } from '@/components/TabBar';
-import { CameraIcon, SunIcon } from '@/components/Icons';
-import { Button, T } from '@/components/ui';
+import { CameraIcon } from '@/components/Icons';
+import { Wood } from '@/components/materials';
+import { Button, Ledger, T } from '@/components/ui';
 import { getMatches, getToday } from '@/lib/data';
 import { useInbox } from '@/lib/inbox';
 import { useSession } from '@/lib/session';
 import { openedWindows } from '@/lib/seen';
 import { dayNumber, longDate, timeAgo } from '@/lib/time';
-import { colors, fonts, radius } from '@/lib/theme';
+import { colors, fonts, gutter, motion, shadow } from '@/lib/theme';
 import type { Match, WindowItem } from '@/lib/types';
 
 type TodayState = { theirs?: WindowItem; mine?: WindowItem; sentToday: boolean };
@@ -26,6 +29,7 @@ type TodayState = { theirs?: WindowItem; mine?: WindowItem; sentToday: boolean }
 export default function Today() {
   const { profile } = useSession();
   const { version } = useInbox();
+  const { width: screenW } = useWindowDimensions();
   const [matches, setMatches] = useState<Match[] | null>(null);
   const [today, setToday] = useState<Record<string, TodayState>>({});
   const [refreshing, setRefreshing] = useState(false);
@@ -57,28 +61,21 @@ export default function Today() {
   const main = matches?.[0];
   const t = main ? today[main.id] : undefined;
 
+  // windowsill geometry
+  const inner = screenW - gutter * 2;
+  const bigW = Math.round(inner * 0.6);
+  const smallW = Math.round(inner * 0.34);
+
   return (
     <Screen
       scroll
       gap={18}
       padBottom={TAB_BAR_SPACE}
       edges={['top']}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.dusk} />}
+      textured
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.walnut} />}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        <View>
-          <T variant="small" style={{ fontSize: 14 }}>{longDate(tz)}</T>
-          <T variant="display">Today</T>
-        </View>
-        {main ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: colors.honey }}>
-            <SunIcon />
-            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.honeyText }}>
-              Day {dayNumber(main.created_at)} with {main.partner.name}
-            </Text>
-          </View>
-        ) : null}
-      </View>
+      <Ledger label={longDate(tz)} note={main ? `Day ${dayNumber(main.created_at)} with ${main.partner.name}` : undefined} />
 
       {matches && !main ? (
         <View style={{ gap: 14, paddingVertical: 30, alignItems: 'center' }}>
@@ -89,103 +86,111 @@ export default function Today() {
       ) : null}
 
       {main?.status === 'paused' ? (
-        <View style={{ padding: 14, borderRadius: radius.md, backgroundColor: colors.honey }}>
-          <T style={{ fontFamily: fonts.semibold, color: colors.honeyText }}>Your window with {main.partner.name} is paused. Resume it from the You tab.</T>
-        </View>
+        <T style={{ fontSize: 14, color: colors.walnut, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: colors.walnut }}>
+          Your window with {main.partner.name} is paused. Resume it from the You tab.
+        </T>
       ) : null}
 
       {main ? (
         <>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <TheirWindow match={main} w={t?.theirs} />
-            <YourWindow match={main} mine={t?.mine} sent={!!t?.sentToday} />
+          {/* the windowsill */}
+          <View style={{ marginTop: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 6 }}>
+              <TheirWindow match={main} w={t?.theirs} width={bigW} />
+              <YourWindow match={main} mine={t?.mine} sent={!!t?.sentToday} width={smallW} />
+            </View>
+            <View style={[{ height: 14, marginHorizontal: -8, borderRadius: 3, overflow: 'hidden' }, shadow.card]}>
+              <Wood />
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, marginTop: 10 }}>
+              <MuseumLabel
+                title={`${main.partner.name}'s window`}
+                sub={t?.theirs ? `${main.partner.home_city} · ${timeAgo(t.theirs.created_at)}` : `${main.partner.home_city} · on its way`}
+              />
+              <MuseumLabel align="right" title="Your window" sub={t?.sentToday ? 'sent today ✓' : 'not sent yet'} />
+            </View>
           </View>
+
           <KnockPad partner={main.partner} />
           <SkyCard person={main.partner} />
         </>
       ) : null}
-
     </Screen>
   );
 }
 
-const CARD_H = 230;
+function MuseumLabel({ title, sub, align = 'left' }: { title: string; sub: string; align?: 'left' | 'right' }) {
+  return (
+    <View style={{ alignItems: align === 'left' ? 'flex-start' : 'flex-end', maxWidth: '58%' }}>
+      <Text style={{ fontFamily: fonts.display, fontSize: 15, color: colors.ink }}>{title}</Text>
+      <Text style={{ fontFamily: fonts.medium, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.muted }}>{sub}</Text>
+    </View>
+  );
+}
 
-function TheirWindow({ match, w }: { match: Match; w?: WindowItem }) {
-  const [boxW, setBoxW] = useState(0);
+function TheirWindow({ match, w, width }: { match: Match; w?: WindowItem; width: number }) {
+  const height = Math.round(width * 1.32);
   const isNew = !!w && !openedWindows.has(w.id);
   const frost = useSharedValue(1);
-  const frostStyle = useAnimatedStyle(() => ({ opacity: frost.value }));
+  const frostStyle = useAnimatedStyle(() => ({ opacity: frost.value, transform: [{ scale: 1 + (1 - frost.value) * 0.12 }] }));
 
   useEffect(() => {
-    // The frosted glass clears when their window has arrived
-    frost.value = w ? withDelay(300, withTiming(0, { duration: 900 })) : 1;
+    // Condensation clears from the glass when their window has arrived
+    frost.value = w ? withDelay(250, withTiming(0, { duration: 900, easing: Easing.out(Easing.quad) })) : 1;
   }, [w, frost]);
 
   return (
     <Pressable
-      style={{ flex: 1, gap: 8 }}
       disabled={!w}
-      onLayout={(e) => setBoxW(e.nativeEvent.layout.width)}
+      accessibilityLabel={w ? `Open ${match.partner.name}'s window` : `${match.partner.name}'s window hasn't arrived yet`}
       onPress={() => {
         if (!w) return;
         openedWindows.add(w.id);
         router.push({ pathname: '/window/[id]', params: { id: w.id } });
       }}
     >
-      {boxW ? (
-        <Arch width={boxW} height={CARD_H} border={6} bottomRadius={16}>
-          {w ? <Image source={{ uri: w.photo_url }} style={{ flex: 1 }} contentFit="cover" transition={300} /> : <CityScene id="their" />}
-          <Animated.View pointerEvents="none" style={[{ position: 'absolute', inset: 0 }, frostStyle]}>
-            <BlurView intensity={40} tint="light" style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              {!w ? <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.ink, textAlign: 'center', paddingHorizontal: 12 }}>On its way…</Text> : null}
-            </BlurView>
-          </Animated.View>
-          {isNew ? (
-            <Animated.View entering={FadeIn.delay(900)} style={{ position: 'absolute', left: 8, top: 64, paddingVertical: 4, paddingHorizontal: 9, borderRadius: 999, backgroundColor: colors.light }}>
-              <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.ink }}>New</Text>
-            </Animated.View>
-          ) : null}
-        </Arch>
-      ) : (
-        <View style={{ height: CARD_H }} />
-      )}
-      <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.ink }}>{match.partner.name}&apos;s window</Text>
-      <T variant="small" style={{ marginTop: -6 }}>
-        {w ? `${match.partner.home_city} · ${timeAgo(w.created_at)}` : `${match.partner.home_city} · not sent yet`}
-      </T>
+      <Arch width={width} height={height} border={9} bottomRadius={4} glass>
+        {w ? <Image source={{ uri: w.photo_url }} style={{ flex: 1 }} contentFit="cover" transition={300} /> : <CityScene id="their" where={match.partner} bike={false} />}
+        <Animated.View pointerEvents="none" style={[{ position: 'absolute', inset: 0 }, frostStyle]}>
+          <BlurView intensity={45} tint="light" style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <LinearGradient colors={['rgba(255,249,237,0.35)', 'rgba(255,249,237,0.1)']} style={{ position: 'absolute', inset: 0 }} />
+            {!w ? <Text style={{ fontFamily: fonts.hand, fontSize: 22, color: colors.hand, textAlign: 'center', paddingHorizontal: 12 }}>on its way…</Text> : null}
+          </BlurView>
+        </Animated.View>
+      </Arch>
+      {isNew ? (
+        <Animated.View entering={SlideInRight.delay(1100).duration(motion.settle)} style={{ position: 'absolute', right: -10, top: height * 0.34 }}>
+          <View style={[{ paddingVertical: 4, paddingHorizontal: 10, backgroundColor: colors.terracotta, transform: [{ rotate: '4deg' }] }, shadow.soft]}>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.4, color: colors.postcard }}>NEW</Text>
+          </View>
+        </Animated.View>
+      ) : null}
     </Pressable>
   );
 }
 
-function YourWindow({ match, mine, sent }: { match: Match; mine?: WindowItem; sent: boolean }) {
-  const [boxW, setBoxW] = useState(0);
+function YourWindow({ match, mine, sent, width }: { match: Match; mine?: WindowItem; sent: boolean; width: number }) {
+  const height = Math.round(width * 1.32);
   return (
     <Pressable
-      style={{ flex: 1, gap: 8 }}
-      onLayout={(e) => setBoxW(e.nativeEvent.layout.width)}
       disabled={sent}
+      accessibilityLabel={sent ? 'Your window was sent today' : 'Take today\'s window'}
       onPress={() => router.push({ pathname: '/capture', params: { match: match.id } })}
     >
-      {boxW ? (
-        <Arch width={boxW} height={CARD_H} border={6} bottomRadius={16} lifted={!!mine}>
-          {mine ? (
-            <Image source={{ uri: mine.photo_url }} style={{ flex: 1 }} contentFit="cover" />
-          ) : (
-            <View style={{ flex: 1, backgroundColor: '#C9D2EA', alignItems: 'center', justifyContent: 'center' }}>
-              <View style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 5, marginLeft: -2.5, backgroundColor: colors.postcard }} />
-              <View style={{ position: 'absolute', left: 0, right: 0, top: '46%', height: 5, backgroundColor: colors.postcard }} />
-              <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.postcard, alignItems: 'center', justifyContent: 'center' }}>
-                <CameraIcon />
-              </View>
-            </View>
-          )}
-        </Arch>
-      ) : (
-        <View style={{ height: CARD_H }} />
-      )}
-      <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.ink }}>Your window</Text>
-      <T variant="small" style={{ marginTop: -6 }}>{sent ? 'Sent today ✓' : 'Not sent yet · tap to open'}</T>
+      <Arch width={width} height={height} border={7} bottomRadius={4} bars={!mine} barWidth={4} glass>
+        {mine ? (
+          <Image source={{ uri: mine.photo_url }} style={{ flex: 1 }} contentFit="cover" />
+        ) : (
+          <LinearGradient colors={['#E9DDC5', '#D8C6A4']} style={{ flex: 1 }} />
+        )}
+      </Arch>
+      {!mine ? (
+        <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: height * 0.46 - 22, alignItems: 'center' }}>
+          <View style={[{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.postcard, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.line }, shadow.soft]}>
+            <CameraIcon size={22} color={colors.walnut} />
+          </View>
+        </View>
+      ) : null}
     </Pressable>
   );
 }

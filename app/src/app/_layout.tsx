@@ -3,10 +3,8 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
-import {
-  Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold,
-} from '@expo-google-fonts/figtree';
+import { Newsreader_600SemiBold, Newsreader_600SemiBold_Italic } from '@expo-google-fonts/newsreader';
+import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold } from '@expo-google-fonts/dm-sans';
 import { Caveat_500Medium, Caveat_700Bold } from '@expo-google-fonts/caveat';
 import { SessionProvider } from '@/lib/session';
 import { InboxProvider } from '@/lib/inbox';
@@ -16,8 +14,8 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    BricolageGrotesque_800ExtraBold,
-    Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold,
+    Newsreader_600SemiBold, Newsreader_600SemiBold_Italic,
+    DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold,
     Caveat_500Medium, Caveat_700Bold,
   });
 

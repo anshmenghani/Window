@@ -9,19 +9,21 @@ import {
   AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState,
 } from 'expo-audio';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { Arch } from '@/components/Arch';
 import { BARS, Waveform } from '@/components/Waveform';
-import { CloseIcon, FlipIcon, MicIcon, PhotosIcon, SendIcon } from '@/components/Icons';
+import { CloseIcon, FlipIcon, MicIcon, PhotosIcon } from '@/components/Icons';
+import { Wood } from '@/components/materials';
 import { Button, IconButton, T } from '@/components/ui';
 import { getMatches, newWindowId, sendWindow } from '@/lib/data';
 import { useSession } from '@/lib/session';
 import { reportSendError } from '@/lib/outbox';
 import { languageName } from '@/lib/cities';
 import { localDate, timeIn } from '@/lib/time';
-import { colors, fonts, radius } from '@/lib/theme';
+import { colors, fonts, radius, shadow } from '@/lib/theme';
 import type { Match } from '@/lib/types';
 
 const MAX_MS = 15000;
@@ -124,7 +126,7 @@ export default function Capture() {
 
   const partner = match?.partner;
   const archW = Math.min(316, screenW - 44);
-  const archH = Math.min(380, Math.round(screenH * 0.36));
+  const archH = Math.min(370, Math.round(screenH * 0.35));
   const recMs = rec.isRecording ? rec.durationMillis : audioMs;
   const mmss = (ms: number) => `0:${String(Math.floor(ms / 1000)).padStart(2, '0')}`;
 
@@ -144,58 +146,59 @@ export default function Capture() {
       </View>
 
       <Pressable onPress={photo ? () => setPhoto(null) : undefined} style={{ alignSelf: 'center' }}>
-        <Arch width={archW} height={archH} border={8} bottomRadius={20} lifted={false} maskColor={colors.night}>
-          {photo ? (
-            <Image source={{ uri: photo }} style={{ flex: 1 }} contentFit="cover" />
-          ) : permission?.granted ? (
-            <CameraView ref={cam} style={{ flex: 1 }} facing={facing} />
-          ) : (
-            <View style={{ flex: 1, backgroundColor: colors.nightCard, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
-              <T style={{ color: colors.postcard, textAlign: 'center' }}>Window needs your camera to take today&apos;s photo.</T>
-              <Button title="Allow camera" onPress={requestPermission} style={{ alignSelf: 'stretch' }} />
-            </View>
-          )}
-          {!photo && permission?.granted ? (
-            <>
-              <View pointerEvents="none" style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, backgroundColor: 'rgba(255,253,248,0.35)' }} />
-              <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: '46%', height: 1, backgroundColor: 'rgba(255,253,248,0.35)' }} />
-            </>
-          ) : photo ? (
-            <View style={{ position: 'absolute', right: 12, bottom: 12, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999, backgroundColor: 'rgba(20,24,58,0.7)' }}>
-              <Text style={{ fontFamily: fonts.semibold, fontSize: 12, color: colors.postcard }}>Tap to retake</Text>
-            </View>
-          ) : null}
-        </Arch>
+        {/* a dark walnut arch with a faint amber edge glow, like light from a lamp behind you */}
+        <View style={{ shadowColor: colors.amber, shadowOpacity: 0.28, shadowRadius: 18, shadowOffset: { width: 0, height: 0 } }}>
+          <Arch width={archW} height={archH} border={10} bottomRadius={6} lifted={false} dark glass maskColor={colors.night}>
+            {photo ? (
+              <Image source={{ uri: photo }} style={{ flex: 1 }} contentFit="cover" />
+            ) : permission?.granted ? (
+              <CameraView ref={cam} style={{ flex: 1 }} facing={facing} />
+            ) : (
+              <View style={{ flex: 1, backgroundColor: colors.nightCard, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
+                <T style={{ color: colors.nightSoft, textAlign: 'center' }}>Window needs your camera to take today&apos;s photo.</T>
+                <Button dark title="Allow camera" onPress={requestPermission} style={{ alignSelf: 'stretch' }} />
+              </View>
+            )}
+            {photo ? (
+              <View style={{ position: 'absolute', right: 12, bottom: 12, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 4, backgroundColor: 'rgba(30,28,34,0.72)' }}>
+                <Text style={{ fontFamily: fonts.semibold, fontSize: 12, color: colors.nightSoft }}>tap to retake</Text>
+              </View>
+            ) : null}
+          </Arch>
+        </View>
       </Pressable>
 
       {!photo ? (
-        <Pressable onPress={pickPhoto} style={{ flexDirection: 'row', alignSelf: 'center', alignItems: 'center', gap: 8, padding: 6 }}>
+        <Pressable onPress={pickPhoto} style={{ flexDirection: 'row', alignSelf: 'center', alignItems: 'center', gap: 8, padding: 4 }}>
           <PhotosIcon size={18} color={colors.nightMuted} />
-          <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.nightMuted }}>Choose from library</Text>
+          <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.nightMuted }}>choose from library</Text>
         </Pressable>
       ) : null}
 
-      <TextInput
-        value={caption}
-        onChangeText={setCaption}
-        maxLength={120}
-        placeholder="write a caption…"
-        placeholderTextColor={colors.dash}
-        style={{ height: 50, borderRadius: radius.md, backgroundColor: colors.postcard, paddingHorizontal: 16, fontFamily: fonts.handBold, fontSize: 23, color: colors.hand }}
-      />
+      {/* the caption, handwritten on a cream note strip */}
+      <View style={[{ borderRadius: 3, backgroundColor: colors.postcard, overflow: 'hidden', transform: [{ rotate: '-0.8deg' }] }, shadow.card]}>
+        <TextInput
+          value={caption}
+          onChangeText={setCaption}
+          maxLength={120}
+          placeholder="write a little note…"
+          placeholderTextColor={colors.dash}
+          style={{ height: 50, paddingHorizontal: 14, fontFamily: fonts.handBold, fontSize: 24, color: colors.hand }}
+        />
+      </View>
       <TextInput
         value={spot}
         onChangeText={setSpot}
         maxLength={60}
-        placeholder="Where? (optional, like 'Klaus atrium')"
+        placeholder="where? (optional, like 'Klaus atrium')"
         placeholderTextColor={colors.nightMuted}
-        style={{ height: 44, borderRadius: radius.md, backgroundColor: colors.nightCard, paddingHorizontal: 16, fontFamily: fonts.medium, fontSize: 15, color: colors.postcard }}
+        style={{ height: 42, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.nightLine, paddingHorizontal: 14, fontFamily: fonts.medium, fontSize: 14, color: colors.nightSoft }}
       />
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14, borderRadius: radius.md, backgroundColor: colors.nightCard }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14, borderRadius: radius.sm, backgroundColor: colors.nightCard, borderWidth: 1, borderColor: colors.nightLine }}>
         <RecDot active={rec.isRecording} ready={!!audioUri} />
         <Waveform levels={levels} progress={Math.min(1, recMs / MAX_MS)} />
-        <Text style={{ marginLeft: 'auto', fontFamily: fonts.medium, fontSize: 13, color: colors.nightMuted }}>
+        <Text style={{ marginLeft: 'auto', fontFamily: fonts.medium, fontSize: 13, color: colors.nightMuted, fontVariant: ['tabular-nums'] }}>
           {mmss(recMs)} / 0:15
         </Text>
         {audioUri && !rec.isRecording ? (
@@ -205,43 +208,51 @@ export default function Capture() {
         ) : null}
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+        {/* an old dictaphone key: hold to talk */}
         <Pressable
           accessibilityLabel="Hold to record a voice note"
           onPressIn={startRecording}
           onPressOut={stopRecording}
-          style={{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: rec.isRecording ? '#F26B55' : colors.nightCard }}
+          style={{ alignItems: 'center', gap: 4 }}
         >
-          <MicIcon />
+          <View style={{ width: 64, height: 64, borderRadius: 14, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: rec.isRecording ? colors.amber : colors.nightLine }}>
+            <LinearGradient colors={rec.isRecording ? ['#5A4632', '#3A2C22'] : ['#3B3740', '#26232B']} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+            <MicIcon color={rec.isRecording ? colors.amber : colors.nightSoft} />
+          </View>
+          <Text style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.2, color: colors.nightMuted }}>HOLD</Text>
         </Pressable>
         {!photo ? (
           <Pressable
             accessibilityLabel="Take photo"
             onPress={takePhoto}
             disabled={!permission?.granted}
-            style={({ pressed }) => [{ width: 84, height: 84, borderRadius: 42, borderWidth: 5, borderColor: colors.light, padding: 5 }, pressed && { transform: [{ scale: 0.94 }] }]}
+            style={({ pressed }) => [{ width: 80, height: 80, borderRadius: 40, borderWidth: 4, borderColor: colors.amber, padding: 5 }, pressed && { transform: [{ scale: 0.95 }] }]}
           >
             <View style={{ flex: 1, borderRadius: 40, backgroundColor: colors.postcard }} />
           </Pressable>
         ) : (
-          <View style={{ width: 84 }} />
+          <View style={{ width: 80 }} />
         )}
+        {/* the mail slot: drop the postcard in */}
         <Pressable
-          accessibilityLabel="Send window"
+          accessibilityLabel="Post your window"
           onPress={send}
           disabled={!photo || sending || !match}
-          style={({ pressed }) => [
-            { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.light, opacity: photo ? 1 : 0.35 },
-            pressed && { transform: [{ scale: 0.94 }] },
-          ]}
+          style={({ pressed }) => [{ alignItems: 'center', gap: 4, opacity: photo ? 1 : 0.35 }, pressed && { transform: [{ translateY: 2 }] }]}
         >
-          <SendIcon />
+          <View style={[{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }, shadow.soft]}>
+            <Wood />
+            <View style={{ width: 40, height: 7, borderRadius: 2, backgroundColor: '#1A0F08', borderTopWidth: 1, borderTopColor: '#000', borderBottomWidth: 1, borderBottomColor: 'rgba(255,225,190,0.25)' }} />
+            <View style={{ position: 'absolute', bottom: 9, width: 18, height: 2, borderRadius: 1, backgroundColor: colors.amber }} />
+          </View>
+          <Text style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.2, color: colors.amber }}>POST</Text>
         </Pressable>
       </View>
       <T variant="small" style={{ textAlign: 'center', color: colors.nightMuted }}>
         {rec.isRecording
-          ? 'Recording… let go to stop'
-          : `Hold the mic to talk. ${partner?.name ?? 'They'} will hear it in ${languageName(partner?.languages[0])}.`}
+          ? 'recording… let go to stop'
+          : `Hold to talk. ${partner?.name ?? 'They'} will hear it in ${languageName(partner?.languages[0])}.`}
       </T>
     </Screen>
   );
@@ -250,8 +261,8 @@ export default function Capture() {
 function RecDot({ active, ready }: { active: boolean; ready: boolean }) {
   const o = useSharedValue(1);
   useEffect(() => {
-    o.value = active ? withRepeat(withTiming(0.2, { duration: 500 }), -1, true) : withTiming(1);
+    o.value = active ? withRepeat(withTiming(0.35, { duration: 700 }), -1, true) : withTiming(1);
   }, [active, o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
-  return <Animated.View style={[{ width: 10, height: 10, borderRadius: 5, backgroundColor: active ? '#F26B55' : ready ? colors.light : '#4A5290' }, style]} />;
+  return <Animated.View style={[{ width: 10, height: 10, borderRadius: 5, backgroundColor: active ? colors.amber : ready ? colors.dusk : colors.nightLine }, style]} />;
 }

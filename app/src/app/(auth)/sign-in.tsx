@@ -2,14 +2,13 @@
 // Supabase Auth needs an email, so the username is turned into a hidden one
 // (see usernameToEmail in lib/config.ts). Nobody ever sees or receives it.
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen, Spacer } from '@/components/Screen';
-import { BackButton, Button, ErrorText, Field, T } from '@/components/ui';
+import { BackButton, Button, ErrorText, Field, T, TextLink } from '@/components/ui';
 import { signIn, signUp } from '@/lib/data';
 import { usernameToEmail } from '@/lib/config';
 import { useSession } from '@/lib/session';
-import { colors, fonts } from '@/lib/theme';
 
 const USERNAME = /^[a-z0-9_.]{3,20}$/;
 
@@ -51,10 +50,10 @@ export default function SignIn() {
   };
 
   return (
-    <Screen scroll gap={24} style={{ paddingHorizontal: 28 }}>
+    <Screen scroll gap={22} style={{ paddingHorizontal: 28 }}>
       <BackButton onPress={() => router.back()} />
-      <View style={{ gap: 8 }}>
-        <T variant="title">{isSignup ? 'Make your window' : 'Welcome back'}</T>
+      <View style={{ gap: 6 }}>
+        <T variant="heading">{isSignup ? 'Make your window' : 'Welcome back'}</T>
         <T variant="muted">
           {isSignup ? 'Pick a username and a password. Your partner only ever sees your first name.' : 'Log in to see today\'s windows.'}
         </T>
@@ -82,18 +81,18 @@ export default function SignIn() {
       />
       <ErrorText>{error}</ErrorText>
       <Spacer />
-      <View style={{ gap: 6 }}>
+      <View style={{ gap: 4 }}>
         <Button
           title={isSignup ? 'Create account' : 'Log in'}
           onPress={submit}
           loading={busy}
           disabled={name.length < 3 || password.length < (isSignup ? 6 : 1)}
         />
-        <Pressable onPress={() => setMode(isSignup ? 'login' : 'signup')} style={{ padding: 10, alignItems: 'center' }}>
-          <T style={{ fontFamily: fonts.semibold, fontSize: 15, color: colors.duskDeep }}>
-            {isSignup ? 'I already have an account' : 'New here? Make an account'}
-          </T>
-        </Pressable>
+        <TextLink
+          title={isSignup ? 'I already have an account' : 'New here? Make an account'}
+          onPress={() => setMode(isSignup ? 'login' : 'signup')}
+          style={{ alignSelf: 'center', paddingVertical: 12 }}
+        />
       </View>
     </Screen>
   );

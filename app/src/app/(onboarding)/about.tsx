@@ -10,7 +10,7 @@ import { saveProfile, signOut } from '@/lib/data';
 import { useSession } from '@/lib/session';
 import { City, findCity, LANGUAGES, searchCities } from '@/lib/cities';
 import { timeIn } from '@/lib/time';
-import { colors, fonts, radius } from '@/lib/theme';
+import { colors, fonts } from '@/lib/theme';
 
 const COMMON = ['en', 'hi', 'es', 'ja', 'ko', 'pt', 'fr', 'zh'];
 
@@ -64,7 +64,6 @@ export default function About() {
         autoCapitalize="words"
         autoComplete="given-name"
         placeholder="Your first name"
-        inputStyle={name ? { borderColor: colors.dusk, borderWidth: 2 } : undefined}
       />
 
       <View style={{ gap: 10 }}>
@@ -91,7 +90,7 @@ export default function About() {
           autoCorrect={false}
         />
         {results.length ? (
-          <Animated.View entering={FadeInDown.duration(200)} style={{ borderRadius: radius.md, backgroundColor: colors.white, overflow: 'hidden' }}>
+          <Animated.View entering={FadeInDown.duration(200)} style={{ borderTopWidth: 1, borderColor: colors.line }}>
             {results.map((c) => (
               <Pressable
                 key={c.name}
@@ -99,7 +98,7 @@ export default function About() {
                   setCity(c);
                   setQuery(`${c.name}, ${c.country}`);
                 }}
-                style={({ pressed }) => [{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.mist }, pressed && { backgroundColor: colors.mist }]}
+                style={({ pressed }) => [{ paddingVertical: 11, paddingHorizontal: 2, borderBottomWidth: 1, borderBottomColor: colors.line }, pressed && { opacity: 0.6 }]}
               >
                 <T style={{ fontFamily: fonts.semibold }}>{c.name}</T>
                 <T variant="small">{c.country} · {timeIn(c.tz)}</T>

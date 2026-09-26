@@ -8,9 +8,11 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { getMatches, sendKnock, watchInbox } from './data';
 import { useSession } from './session';
-import { colors, fonts, radius, shadow } from './theme';
+import { colors, fonts, shadow } from './theme';
 import type { Knock, WindowItem } from './types';
 import { KnockIcon } from '@/components/Icons';
+import { Brass, PaperGrain } from '@/components/materials';
+import { RhythmMarks } from '@/components/KnockPad';
 
 type Banner =
   | { kind: 'knock'; knock: Knock; name: string }
@@ -74,26 +76,32 @@ export function InboxProvider({ children }: { children: ReactNode }) {
       {children}
       {banner ? (
         <Animated.View
-          entering={SlideInUp.springify().damping(16)}
+          entering={SlideInUp.duration(420)}
           exiting={SlideOutUp}
           style={{ position: 'absolute', left: 14, right: 14, top: insets.top + 8 }}
         >
           <View
             style={[
-              { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: radius.lg, backgroundColor: colors.ink },
+              {
+                flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 4,
+                backgroundColor: colors.postcard, borderLeftWidth: 4, borderLeftColor: colors.terracotta, overflow: 'hidden',
+              },
               shadow.card,
             ]}
           >
-            <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.light, alignItems: 'center', justifyContent: 'center' }}>
-              <KnockIcon color={colors.ink} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.postcard }}>
-                {banner.kind === 'knock' ? 'Knock knock' : `${banner.name}'s window arrived`}
+            <PaperGrain />
+            <Brass size={38}>
+              <KnockIcon color="#5A3E14" size={18} />
+            </Brass>
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={{ fontFamily: fonts.display, fontSize: 16, color: colors.ink }}>
+                {banner.kind === 'knock' ? `${banner.name} knocked` : `${banner.name}'s window arrived`}
               </Text>
-              <Text style={{ fontFamily: fonts.body, fontSize: 13, color: colors.nightSoft }}>
-                {banner.kind === 'knock' ? `${banner.name} knocked on your window` : `A new window from ${banner.city}`}
-              </Text>
+              {banner.kind === 'knock' ? (
+                <RhythmMarks pattern={banner.knock.pattern} color={colors.terracotta} />
+              ) : (
+                <Text style={{ fontFamily: fonts.body, fontSize: 13, color: colors.muted }}>A new window from {banner.city}</Text>
+              )}
             </View>
             <Pressable
               onPress={() => {
@@ -106,8 +114,8 @@ export function InboxProvider({ children }: { children: ReactNode }) {
                 setBanner(null);
               }}
               style={({ pressed }) => [
-                { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.light },
-                pressed && { opacity: 0.8 },
+                { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 6, borderWidth: 1.5, borderColor: colors.ink },
+                pressed && { opacity: 0.6 },
               ]}
             >
               <Text style={{ fontFamily: fonts.bold, fontSize: 13, color: colors.ink }}>

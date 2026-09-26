@@ -9,14 +9,15 @@ import { Screen } from '@/components/Screen';
 import { Arch } from '@/components/Arch';
 import { WordSticker } from '@/components/WordSticker';
 import { VoicePlayer } from '@/components/VoicePlayer';
-import { BulbIcon } from '@/components/Icons';
+import { PaperGrain } from '@/components/materials';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { BackButton, Button, T } from '@/components/ui';
 import { getMatches, getWindow, saveWindow } from '@/lib/data';
 import { useSession } from '@/lib/session';
 import { openedWindows } from '@/lib/seen';
 import { languageName } from '@/lib/cities';
 import { timeIn } from '@/lib/time';
-import { colors, fonts, radius } from '@/lib/theme';
+import { colors, fonts, motion, shadow } from '@/lib/theme';
 import type { Match, WindowItem } from '@/lib/types';
 
 export default function OpenedWindow() {
@@ -67,10 +68,10 @@ export default function OpenedWindow() {
         </View>
       </View>
 
-      <Arch width={archW} height={archH} border={8} bottomRadius={18}>
+      <Arch width={archW} height={archH} border={10} bottomRadius={6} glass>
         <Image source={{ uri: w.photo_url }} style={{ flex: 1 }} contentFit="cover" transition={250} />
         {w.stickers.map((s, i) => (
-          <WordSticker key={`${s.word}-${i}`} sticker={s} index={i} lang={w.src_lang} boxW={archW - 16} boxH={archH - 16} />
+          <WordSticker key={`${s.word}-${i}`} sticker={s} index={i} lang={w.src_lang} boxW={archW - 20} boxH={archH - 20} />
         ))}
       </Arch>
 
@@ -79,12 +80,15 @@ export default function OpenedWindow() {
       ) : null}
 
       {shownCaption ? (
-        <View style={{ gap: 2 }}>
-          <T variant="hand" style={{ fontSize: 26, lineHeight: 29 }}>{shownCaption}</T>
+        // handwritten in the margin of a sheet of writing paper
+        <View style={[{ backgroundColor: colors.postcard, borderRadius: 3, paddingVertical: 12, paddingLeft: 26, paddingRight: 14, overflow: 'hidden' }, shadow.soft]}>
+          <PaperGrain />
+          <View style={{ position: 'absolute', left: 14, top: 0, bottom: 0, width: 1.5, backgroundColor: 'rgba(185,88,61,0.45)' }} />
+          <T variant="hand" style={{ fontSize: 26, lineHeight: 30 }}>{shownCaption}</T>
           {translated ? (
-            <Pressable onPress={() => setShowOriginal((s) => !s)} style={{ paddingVertical: 4, alignSelf: 'flex-start' }}>
-              <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.duskDeep }}>
-                {showOriginal ? `Show in ${myLang}` : `Translated from ${languageName(w.src_lang)} · Show original`}
+            <Pressable onPress={() => setShowOriginal((s) => !s)} style={{ paddingTop: 6, alignSelf: 'flex-start' }}>
+              <Text style={{ fontFamily: fonts.medium, fontSize: 12, color: colors.muted, textDecorationLine: 'underline', textDecorationColor: colors.dash }}>
+                {showOriginal ? `Show in ${myLang}` : `translated from ${languageName(w.src_lang)} · show original`}
               </Text>
             </Pressable>
           ) : null}
@@ -100,21 +104,27 @@ export default function OpenedWindow() {
       <VoicePlayer name={sender?.name ?? 'Their'} dubUrl={w.dub_url} originalUrl={w.audio_url} langName={myLang} />
 
       {w.context_note ? (
-        <Animated.View entering={FadeInDown.delay(300)} style={{ flexDirection: 'row', gap: 12, padding: 14, paddingRight: 16, borderRadius: radius.md, backgroundColor: colors.honey }}>
-          <BulbIcon />
-          <View style={{ flex: 1, gap: 4 }}>
-            <T variant="eyebrow" style={{ color: colors.honeyText, letterSpacing: 1 }}>Travel note</T>
-            <T style={{ fontSize: 14, lineHeight: 20, color: '#3D2A06' }}>{w.context_note}</T>
+        <Animated.View
+          entering={FadeInDown.delay(350).duration(motion.arrive)}
+          style={[{ backgroundColor: colors.oldPaper, borderRadius: 2, padding: 14, paddingTop: 12, gap: 6, overflow: 'hidden', transform: [{ rotate: '0.6deg' }] }, shadow.card]}
+        >
+          <PaperGrain />
+          {/* the fold crease */}
+          <View style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 1, backgroundColor: 'rgba(110,68,41,0.12)' }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <CompassStar />
+            <T variant="eyebrow">Travel note</T>
           </View>
+          <T style={{ fontSize: 15, lineHeight: 22, color: colors.ink }}>{w.context_note}</T>
         </Animated.View>
       ) : null}
 
       {!fromMe ? (
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
           <Button
-            variant="white"
-            title={saved ? 'Saved ✓' : 'Save'}
-            style={{ flex: 1 }}
+            variant="outline"
+            title={saved ? 'Pinned ✓' : 'Pin to wall'}
+            style={{ flex: 1.2 }}
             onPress={() => {
               const next = !saved;
               setSaved(next);
@@ -124,11 +134,21 @@ export default function OpenedWindow() {
           />
           <Button
             title="Reply with your window"
-            style={{ flex: 2.4 }}
+            style={{ flex: 2 }}
             onPress={() => router.push({ pathname: '/capture', params: { match: w.match_id } })}
           />
         </View>
       ) : null}
     </Screen>
+  );
+}
+
+/** A small hand-inked compass star for the travel note. */
+function CompassStar() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 18 18">
+      <Circle cx={9} cy={9} r={8} fill="none" stroke={colors.walnut} strokeWidth={1} opacity={0.6} />
+      <Path d="M9 1.5 L10.3 7.7 L16.5 9 L10.3 10.3 L9 16.5 L7.7 10.3 L1.5 9 L7.7 7.7 Z" fill={colors.terracotta} opacity={0.85} />
+    </Svg>
   );
 }

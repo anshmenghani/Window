@@ -1,15 +1,16 @@
 // Finding your match: make the 3–5 s wait feel magical while POST /match runs.
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
-import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withTiming, Easing } from 'react-native-reanimated';
+import { Text, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, useAnimatedStyle, useSharedValue, withRepeat, withTiming, Easing } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Screen, Spacer } from '@/components/Screen';
 import { Arch } from '@/components/Arch';
-import { Button, T, Tick } from '@/components/ui';
+import { Button, T } from '@/components/ui';
 import { findMatches } from '@/lib/data';
 import { useSession } from '@/lib/session';
-import { colors } from '@/lib/theme';
+import { colors, fonts, motion, shadow } from '@/lib/theme';
 import type { MatchResult } from '@/lib/types';
 
 export default function Matching() {
@@ -23,8 +24,9 @@ export default function Matching() {
   const [results, setResults] = useState<MatchResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const glow = useSharedValue(0.4);
-  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
+  // warm lamplight drifting slowly behind the frosted glass
+  const glow = useSharedValue(0);
+  const glowStyle = useAnimatedStyle(() => ({ transform: [{ translateY: 40 - glow.value * 80 }, { translateX: -20 + glow.value * 40 }] }));
 
   const run = () => {
     setError(null);
@@ -38,7 +40,7 @@ export default function Matching() {
   };
 
   useEffect(() => {
-    glow.value = withRepeat(withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.quad) }), -1, true);
+    glow.value = withRepeat(withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.sin) }), -1, true);
     return run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -46,21 +48,26 @@ export default function Matching() {
   const done = results !== null && ticks >= 3;
   const first = results?.find((r) => r.status === 'matched' && r.match);
 
-  const lines = [`People who live in ${city}`, 'Matching your interests', `Who dreams of ${home}?`];
+  const lines = [`someone who lives in ${places[0] ?? city}`, 'who loves what you love', `and dreams of ${home}`];
   const foundCity = first?.match?.city;
 
   return (
-    <Screen dark bg={colors.ink} gap={30} style={{ alignItems: 'center', paddingHorizontal: 28, paddingTop: 36 }}>
-      <Arch width={230} height={290} border={10} frameColor="#2E3566" bars lifted={false} bottomRadius={20}>
-        <View style={{ flex: 1, backgroundColor: '#3A4378' }}>
-          <Animated.View style={[{ position: 'absolute', inset: 0 }, glowStyle]}>
-            <LinearGradient colors={['rgba(242,184,75,0)', 'rgba(242,184,75,0.35)', 'rgba(242,184,75,0.8)']} locations={[0.2, 0.6, 1]} style={{ flex: 1 }} />
+    <Screen dark gap={26} style={{ alignItems: 'center', paddingHorizontal: 28, paddingTop: 36 }}>
+      <Arch width={220} height={280} border={10} bars dark lifted bottomRadius={6}>
+        <View style={{ flex: 1, backgroundColor: '#2A2530' }}>
+          <Animated.View style={[{ position: 'absolute', left: -40, right: -40, top: 40, height: 260 }, glowStyle]}>
+            <LinearGradient
+              colors={['rgba(224,169,85,0)', 'rgba(224,169,85,0.55)', 'rgba(224,169,85,0)']}
+              locations={[0, 0.5, 1]}
+              style={{ flex: 1, borderRadius: 200 }}
+            />
           </Animated.View>
+          <BlurView intensity={30} tint="dark" style={{ position: 'absolute', inset: 0 }} />
         </View>
       </Arch>
 
       <View style={{ gap: 10, alignItems: 'center' }}>
-        <T variant="title" style={{ color: colors.postcard, textAlign: 'center', fontSize: 28 }}>
+        <T variant="title" style={{ color: colors.nightSoft, textAlign: 'center' }}>
           {done && !first ? 'No one free yet' : done ? `We found your window in ${foundCity}` : `Looking for your window in ${city}`}
         </T>
         <T variant="muted" style={{ color: colors.nightSoft, textAlign: 'center' }}>
@@ -70,27 +77,29 @@ export default function Matching() {
         </T>
       </View>
 
-      <View style={{ alignSelf: 'stretch', gap: 14, padding: 18, borderRadius: 20, backgroundColor: '#262C58' }}>
-        {lines.map((l, i) => (
-          <View key={l} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Tick dark done={ticks > i} />
-            <T style={{ color: ticks > i ? colors.postcard : colors.nightSoft, fontSize: 15 }}>{l}</T>
-          </View>
+      {/* status notes, pinned up one at a time */}
+      <View style={{ alignSelf: 'stretch', gap: 10, minHeight: 150 }}>
+        {lines.slice(0, ticks).map((l, i) => (
+          <Animated.View key={l} entering={FadeInDown.duration(motion.settle)} style={{ alignSelf: i % 2 ? 'flex-end' : 'flex-start' }}>
+            <View style={[{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 2, backgroundColor: colors.postcard, transform: [{ rotate: `${[-2, 1.5, -1][i]}deg` }] }, shadow.card]}>
+              <Text style={{ fontFamily: fonts.medium, fontSize: 15, color: colors.ink }}>{l} ✓</Text>
+            </View>
+          </Animated.View>
         ))}
       </View>
 
       <Spacer />
       {error ? (
         <View style={{ alignSelf: 'stretch', gap: 10 }}>
-          <T style={{ color: '#F26B55', textAlign: 'center' }}>{error}</T>
-          <Button title="Try again" onPress={run} />
+          <T style={{ color: colors.amber, textAlign: 'center' }}>{error}</T>
+          <Button dark title="Try again" onPress={run} />
         </View>
       ) : done ? (
         <Animated.View entering={FadeIn} style={{ alignSelf: 'stretch' }}>
           {first?.match ? (
-            <Button title="See your match" onPress={() => router.replace({ pathname: '/match', params: { id: first.match!.id } })} />
+            <Button dark title="See your match" onPress={() => router.replace({ pathname: '/match', params: { id: first.match!.id } })} />
           ) : (
-            <Button title="Go to Today" onPress={() => router.replace('/today')} />
+            <Button dark title="Go to Today" onPress={() => router.replace('/today')} />
           )}
         </Animated.View>
       ) : (

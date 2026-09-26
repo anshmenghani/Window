@@ -5,6 +5,9 @@ import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-au
 import { colors, fonts, radius } from '@/lib/theme';
 import { PauseIcon, PlayIcon } from './Icons';
 
+// fixed pseudo-waveform heights for the strip
+const BARS = Array.from({ length: 42 }, (_, i) => 4 + Math.round(10 * Math.abs(Math.sin(i * 1.7) * Math.cos(i * 0.6))));
+
 function mmss(sec: number) {
   const s = Math.max(0, Math.round(sec));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -36,12 +39,12 @@ export function VoicePlayer({
   const progress = status.duration ? status.currentTime / status.duration : 0;
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, paddingRight: 14, borderRadius: radius.lg, backgroundColor: colors.white }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 10, borderRadius: radius.sm, backgroundColor: colors.postcard, borderWidth: 1, borderColor: colors.line }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={status.playing ? 'Pause voice note' : 'Play voice note'}
         onPress={toggle}
-        style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.dusk, alignItems: 'center', justifyContent: 'center' }}
+        style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.walnut, alignItems: 'center', justifyContent: 'center' }}
       >
         {status.playing ? <PauseIcon /> : <PlayIcon />}
       </Pressable>
@@ -50,8 +53,11 @@ export function VoicePlayer({
           {dubUrl ? <ModeChip label={`${name}'s voice, in ${langName}`} on={mode === 'dub'} onPress={() => setMode('dub')} /> : null}
           {originalUrl ? <ModeChip label="Original" on={mode === 'original'} onPress={() => setMode('original')} /> : null}
         </View>
-        <View style={{ height: 4, borderRadius: 2, backgroundColor: colors.mist, overflow: 'hidden' }}>
-          <View style={{ width: `${progress * 100}%`, height: 4, backgroundColor: colors.dusk }} />
+        {/* a thin waveform strip; the played part is inked */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, height: 16 }}>
+          {BARS.map((h, i) => (
+            <View key={i} style={{ width: 2, height: h, borderRadius: 1, backgroundColor: i / BARS.length <= progress ? colors.walnut : colors.line }} />
+          ))}
         </View>
       </View>
       <Text style={{ fontFamily: fonts.medium, fontSize: 13, color: colors.muted }}>{mmss(status.duration || 0)}</Text>
@@ -63,7 +69,7 @@ function ModeChip({ label, on, onPress }: { label: string; on: boolean; onPress:
   return (
     <Pressable
       onPress={onPress}
-      style={{ paddingVertical: 3, paddingHorizontal: 9, borderRadius: radius.pill, backgroundColor: on ? colors.ink : colors.mist }}
+      style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 3, backgroundColor: on ? colors.ink : colors.oldPaper }}
     >
       <Text style={{ fontFamily: fonts.semibold, fontSize: 12, color: on ? colors.postcard : colors.ink }}>{label}</Text>
     </Pressable>

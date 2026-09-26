@@ -14,7 +14,7 @@ export function Waveform({ levels, progress }: { levels: number[]; progress: num
         const on = i < filled;
         const level = on ? recent[i] ?? 0.3 : 0;
         const h = on ? 6 + level * 22 : 4;
-        return <View key={i} style={{ width: 4, height: h, borderRadius: 2, backgroundColor: on ? colors.light : '#4A5290' }} />;
+        return <View key={i} style={{ width: 4, height: h, borderRadius: 2, backgroundColor: on ? colors.amber : colors.nightLine }} />;
       })}
     </View>
   );

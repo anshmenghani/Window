@@ -1,4 +1,4 @@
-// Floating Night Ink tab bar from the design canvas.
+// Bottom navigation: a flat ink ledger strip across the bottom, understated.
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -12,7 +12,8 @@ const TABS: Record<string, { label: string; Icon: typeof TodayTabIcon }> = {
   you: { label: 'You', Icon: YouTabIcon },
 };
 
-export const TAB_BAR_SPACE = 110; // bottom padding screens need so content isn't hidden
+// The footer sits in the layout (not floating), so screens only need a little extra space.
+export const TAB_BAR_SPACE = 12;
 
 type Props = {
   state: { index: number; routes: { key: string; name: string }[] };
@@ -24,9 +25,8 @@ export function TabBar({ state, navigation }: Props) {
   return (
     <View
       style={{
-        position: 'absolute', left: 16, right: 16, bottom: Math.max(insets.bottom, 12) + 4, height: 68, borderRadius: 24,
-        backgroundColor: colors.ink, flexDirection: 'row', alignItems: 'center',
-        shadowColor: colors.ink, shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8,
+        flexDirection: 'row', backgroundColor: colors.ink, paddingTop: 8, paddingBottom: Math.max(insets.bottom, 10),
+        borderTopWidth: 1, borderTopColor: colors.walnut,
       }}
     >
       {state.routes.map((route, i) => {
@@ -46,10 +46,11 @@ export function TabBar({ state, navigation }: Props) {
                 navigation.navigate(route.name);
               }
             }}
-            style={{ flex: 1, alignItems: 'center', gap: 3 }}
+            style={{ flex: 1, alignItems: 'center', gap: 3, paddingVertical: 2 }}
           >
-            <tab.Icon color={color} />
-            <Text style={{ fontFamily: focused ? fonts.bold : fonts.semibold, fontSize: 11, color }}>{tab.label}</Text>
+            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: focused ? colors.light : 'transparent', marginBottom: 1 }} />
+            <tab.Icon color={color} size={20} />
+            <Text style={{ fontFamily: focused ? fonts.bold : fonts.medium, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color }}>{tab.label}</Text>
           </Pressable>
         );
       })}

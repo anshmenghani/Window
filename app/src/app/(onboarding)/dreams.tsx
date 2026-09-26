@@ -11,7 +11,7 @@ import { saveProfile } from '@/lib/data';
 import { useSession } from '@/lib/session';
 import { findCity, searchCities } from '@/lib/cities';
 import { clockLine } from '@/lib/time';
-import { colors, fonts, radius } from '@/lib/theme';
+import { colors, fonts, radius, shadow } from '@/lib/theme';
 
 // Where dream pins sit on the little globe (in the 334×200 drawing)
 const SLOTS = [
@@ -51,10 +51,10 @@ export default function Dreams() {
       </View>
 
       {/* little globe with flight paths from home to each dream */}
-      <View style={{ height: 200, borderRadius: radius.xl, backgroundColor: colors.ink, overflow: 'hidden' }}>
+      <View style={[{ height: 200, borderRadius: radius.lg, backgroundColor: colors.night, overflow: 'hidden' }, shadow.soft]}>
         <Svg viewBox="0 0 334 200" width="100%" height="100%">
-          <Circle cx={167} cy={210} r={190} fill="#2A3160" />
-          <G fill="none" stroke="#3E4680" strokeWidth={1}>
+          <Circle cx={167} cy={210} r={190} fill="#2E2A36" />
+          <G fill="none" stroke="rgba(217,206,184,0.16)" strokeWidth={1}>
             <Ellipse cx={167} cy={210} rx={190} ry={60} />
             <Ellipse cx={167} cy={210} rx={190} ry={120} />
             <Ellipse cx={167} cy={210} rx={60} ry={190} />
@@ -64,20 +64,20 @@ export default function Dreams() {
             <Path
               key={d}
               d={`M40 120 Q${(40 + SLOTS[i].x) / 2} ${Math.min(SLOTS[i].y, 120) - 70} ${SLOTS[i].x} ${SLOTS[i].y}`}
-              fill="none" stroke={colors.light} strokeWidth={i === 0 ? 2 : 1.4} strokeDasharray="4 6" opacity={i === 0 ? 1 : 0.6}
+              fill="none" stroke={colors.nightSoft} strokeWidth={i === 0 ? 1.8 : 1.3} strokeDasharray="3 4" opacity={i === 0 ? 0.95 : 0.55}
             />
           ))}
           <Circle cx={40} cy={120} r={6} fill={colors.postcard} />
           {dreams.map((d, i) => (
-            <Circle key={d} cx={SLOTS[i].x} cy={SLOTS[i].y} r={i === 0 ? 7 : 6} fill={colors.light} />
+            <Circle key={d} cx={SLOTS[i].x} cy={SLOTS[i].y} r={i === 0 ? 6 : 5} fill={colors.terracotta} stroke={colors.postcard} strokeWidth={1.5} />
           ))}
         </Svg>
-        <Text style={{ position: 'absolute', left: 14, top: 132, fontFamily: fonts.semibold, fontSize: 12, color: colors.postcard }}>You · {home}</Text>
+        <Text style={{ position: 'absolute', left: 14, top: 132, fontFamily: fonts.semibold, fontSize: 12, color: colors.nightSoft }}>You · {home}</Text>
         {dreams.map((d, i) => (
           <Text
             key={d}
             style={[
-              { position: 'absolute', top: SLOTS[i].y - 22, fontFamily: fonts.semibold, fontSize: 12, color: colors.light },
+              { position: 'absolute', top: SLOTS[i].y - 22, fontFamily: fonts.semibold, fontSize: 12, color: colors.amber },
               SLOTS[i].lx === 'right' ? { right: 10 } : { left: SLOTS[i].x - 24 },
             ]}
           >
@@ -101,7 +101,7 @@ export default function Dreams() {
                 setDreams((d) => [...d, c.name]);
                 setQuery('');
               }}
-              style={({ pressed }) => [{ paddingVertical: 12, paddingHorizontal: 16, borderRadius: radius.md, backgroundColor: colors.white }, pressed && { opacity: 0.7 }]}
+              style={({ pressed }) => [{ paddingVertical: 11, paddingHorizontal: 2, borderBottomWidth: 1, borderBottomColor: colors.line }, pressed && { opacity: 0.6 }]}
             >
               <T style={{ fontFamily: fonts.semibold }}>+ {c.name}, {c.country}</T>
               <T variant="small">{clockLine(myTz, c.tz)}</T>
@@ -110,7 +110,7 @@ export default function Dreams() {
         </View>
       ) : null}
 
-      <View style={{ gap: 8 }}>
+      <View>
         {dreams.map((d, i) => {
           const c = findCity(d);
           return (
@@ -118,11 +118,9 @@ export default function Dreams() {
               key={d}
               entering={FadeInDown.springify()}
               layout={LinearTransition}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderRadius: radius.md, backgroundColor: colors.white }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.line }}
             >
-              <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: colors.honey, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontFamily: fonts.bold, color: colors.honeyDeep }}>{i + 1}</Text>
-              </View>
+              <Text style={{ width: 18, fontFamily: fonts.displayItalic, fontSize: 19, color: colors.terracotta }}>{i + 1}</Text>
               <View style={{ flex: 1 }}>
                 <T style={{ fontFamily: fonts.semibold }}>{d}{c ? `, ${c.country}` : ''}</T>
                 {c ? <T variant="small">{clockLine(myTz, c.tz)}</T> : null}
@@ -141,8 +139,8 @@ export default function Dreams() {
         onPress={() => setMutual((m) => !m)}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 }}
       >
-        <View style={{ width: 24, height: 24, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: mutual ? colors.dusk : colors.white, borderWidth: mutual ? 0 : 1.5, borderColor: colors.line }}>
-          {mutual ? <CheckIcon /> : null}
+        <View style={{ width: 22, height: 22, borderRadius: radius.tag, alignItems: 'center', justifyContent: 'center', backgroundColor: mutual ? colors.oldPaper : 'transparent', borderWidth: 1, borderColor: mutual ? colors.walnut : colors.dash }}>
+          {mutual ? <CheckIcon color={colors.duskDeep} size={12} /> : null}
         </View>
         <T style={{ flex: 1, fontSize: 14, lineHeight: 20 }}>
           <T style={{ fontFamily: fonts.bold, fontSize: 14 }}>Mutual dreams:</T> prefer people who dream of visiting {home}.
