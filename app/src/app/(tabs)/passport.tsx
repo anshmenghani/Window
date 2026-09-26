@@ -53,6 +53,7 @@ export default function Passport() {
   const [selected, setSelected] = useState<string | null>(null);
   const [plan, setPlan] = useState<ItineraryStop[] | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(false);
+  const [visit, setVisit] = useState(0); // reload the trip plan each time the tab is opened
 
   useFocusEffect(
     useCallback(() => {
@@ -61,6 +62,7 @@ export default function Passport() {
         const ms = (await getMatches()).filter((m) => m.status !== 'ended').slice(0, 1);
         setMatches(ms);
         setSelected(ms[0]?.id ?? null);
+        setVisit((v) => v + 1);
         // Stamps mark real moments in your letters (the AI names them); the bond is counted from what you've shared
         if (ms[0]) {
           const [st, b] = await Promise.all([getStamps(ms[0].id).catch(() => []), getBond(ms[0].id).catch(() => null)]);
@@ -82,7 +84,7 @@ export default function Passport() {
       .then(setPlan)
       .catch(() => setPlan([]))
       .finally(() => setLoadingPlan(false));
-  }, [selected]);
+  }, [selected, visit]);
 
   const match = matches.find((m) => m.id === selected);
   const p = match?.partner;

@@ -168,7 +168,7 @@ def demo_reset(_user: str = Depends(require_user)) -> dict[str, Any]:
     for other in rows("matches"):
         if other["id"] != m["id"] and other.get("status") in ("active", "paused") and {a, b} & {other.get("user_a"), other.get("user_b")}:
             sb.table("matches").update({"status": "ended"}).eq("id", other["id"]).execute()
-    sb.table("matches").update({"status": "active"}).eq("id", m["id"]).execute()
+    sb.table("matches").update({"status": "active", "itinerary": None}).eq("id", m["id"]).execute()
 
     # 2) letters sent after the preloaded history (their translations go with them)
     live = [w for w in rows("windows", match_id=m["id"]) if not w.get("demo_seed")]
@@ -332,6 +332,12 @@ def process_pipeline(window_id: str) -> None:
             fields["steps"] = steps
             update_translation(window_id, fields)
         update_translation(window_id, {"status": "ready", "steps": steps, "error": None})
+        # a new letter means new places: the "When I visit" plan is rewritten next time it's opened
+        sb.table("matches").update({"itinerary": None}).eq("id", window["match_id"]).execute()
+        try:
+            send_push(window["recipient_id"], *letter_push(window, sender))
+        except Exception as error:
+            print(f"[push] letter failed: {error}", flush=True)
         try:
             remember_letter(window, match_row or {}, sender, recipient, translated, spot)
         except Exception:
@@ -491,6 +497,50 @@ def get_itinerary(body: ItineraryRequest, user_id: str = Depends(require_user)) 
     return result
 
 
+def send_push(recipient_id: str, title: str, body: str, data: dict[str, Any]) -> bool:
+    """Phone notification through Expo's push service. Returns False when the person has no phone registered."""
+    token_row = one("push_tokens", user_id=recipient_id)
+    token = (token_row or {}).get("token")
+    if not token:
+        return False
+    response = httpx.post("https://exp.host/--/api/v2/push/send", json={"to": token, "title": title, "body": body, "sound": "default", "data": data}, timeout=10)
+    response.raise_for_status()
+    print(f"[push] {title!r} -> {recipient_id}", flush=True)
+    return True
+
+
+def letter_push(window: dict[str, Any], sender: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+    title = f"{sender.get('name') or 'Your pen pal'} sent you a window" + (f" from {sender['home_city']}" if sender.get("home_city") else "")
+    return title, "Tap to open it", {"type": "window", "id": window["id"]}
+
+
+def knock_push(knock: dict[str, Any], sender: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+    where = f" in {sender.get('home_city')}" if knock.get("source") == "window" and sender.get("home_city") else ""
+    return f"{sender.get('name') or 'Someone'} knocked", f"Knock knock, on the window{where}", {"type": "knock", "id": knock.get("id")}
+
+
+class KnockHook(BaseModel):
+    id: UUID
+
+
+@app.post("/hooks/knock")
+def knock_hook(body: KnockHook) -> dict[str, bool]:
+    """Called by the database (pg_net trigger on knocks) with just the knock's id. The server looks the knock
+    up itself and notifies once, only for a knock made in the last 2 minutes, so the call needs no secret."""
+    knock = one("knocks", id=str(body.id))
+    if not knock or knock.get("notified"):
+        return {"ok": True}
+    created = datetime.fromisoformat(str(knock["created_at"]).replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) - created > timedelta(minutes=2):
+        return {"ok": True}
+    get_supabase().table("knocks").update({"notified": True}).eq("id", str(body.id)).execute()
+    try:
+        send_push(knock["to_user"], *knock_push(knock, profile(knock["from_user"])))
+    except Exception as error:
+        print(f"[push] knock failed: {error}", flush=True)
+    return {"ok": True}
+
+
 @app.post("/hooks/push")
 def push_hook(payload: dict[str, Any], x_hook_secret: str | None = Header(default=None)) -> dict[str, bool]:
     secret = os.getenv("HOOK_SECRET", "")
@@ -499,22 +549,9 @@ def push_hook(payload: dict[str, Any], x_hook_secret: str | None = Header(defaul
     record, old = payload.get("record") or {}, payload.get("old_record") or {}
     table = payload.get("table")
     if table == "knocks" and payload.get("type") == "INSERT":
-        recipient_id = record.get("to_user")
-        sender = profile(record.get("from_user", ""))
-        source = f" in {sender.get('home_city')}" if record.get("source") == "window" and sender.get("home_city") else ""
-        title, body, data = f"{sender.get('name') or 'Someone'} knocked", f"Knock knock, on the window{source}", {"type": "knock", "id": record.get("id")}
+        send_push(record.get("to_user", ""), *knock_push(record, profile(record.get("from_user", ""))))
     elif table == "window_translations" and record.get("status") == "ready" and old.get("status") != "ready":
-        recipient_id = record.get("recipient_id")
         window = one("windows", id=record.get("window_id"))
-        sender = profile(window["sender_id"]) if window else {}
-        title = f"{sender.get('name') or 'Your pen pal'} sent you a window" + (f" from {sender['home_city']}" if sender.get("home_city") else "")
-        body = "Tap to open it"
-        data = {"type": "window", "id": record.get("window_id")}
-    else:
-        return {"ok": True}
-    token_row = one("push_tokens", user_id=recipient_id)
-    token = (token_row or {}).get("token") or profile(recipient_id).get("expo_push_token")
-    if token:
-        response = httpx.post("https://exp.host/--/api/v2/push/send", json={"to": token, "title": title, "body": body, "sound": "default", "data": data}, timeout=10)
-        response.raise_for_status()
+        if window:
+            send_push(record.get("recipient_id", ""), *letter_push(window, profile(window["sender_id"])))
     return {"ok": True}

@@ -401,3 +401,25 @@ alter table public.windows add column if not exists demo_seed boolean not null d
 alter table public.stamps add column if not exists demo_seed boolean not null default false;
 alter table public.portraits add column if not exists demo_text text;
 alter table public.portraits add column if not exists demo_letters int;
+
+-- ---------- phone notifications for knocks ----------
+-- Letters are notified by the server when they finish processing. Knocks can come straight from the
+-- physical windows, so the database pings the server (it looks the knock up and notifies once).
+create extension if not exists pg_net;
+alter table public.knocks add column if not exists notified boolean not null default false;
+create or replace function public.notify_knock() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  begin
+    perform net.http_post(
+      url := 'https://window-api-0r9n.onrender.com/hooks/knock',
+      body := jsonb_build_object('id', new.id),
+      headers := '{"Content-Type": "application/json"}'::jsonb
+    );
+  exception when others then null; -- a notification must never stop a knock
+  end;
+  return new;
+end $$;
+drop trigger if exists notify_knock on public.knocks;
+create trigger notify_knock after insert on public.knocks
+for each row execute function public.notify_knock();

@@ -40,6 +40,8 @@ export default function Wall() {
   const [selected, setSelected] = useState<string | null>(null);
   const [windows, setWindows] = useState<WindowItem[]>([]);
   const [portrait, setPortrait] = useState<Portrait | null>(null);
+  // bumps every time the tab is opened, so the wall reloads (e.g. after new letters or a demo reset)
+  const [visit, setVisit] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -48,6 +50,7 @@ export default function Wall() {
         const current = ms.filter((m) => m.status !== 'ended').slice(0, 1);
         setMatches(current);
         setSelected(current[0]?.id ?? null);
+        setVisit((v) => v + 1);
       });
     }, []),
   );
@@ -56,7 +59,7 @@ export default function Wall() {
     if (!selected) return;
     getWall(selected).then(setWindows).catch(() => setWindows([]));
     getPortrait(selected).then(setPortrait).catch(() => setPortrait(null));
-  }, [selected]);
+  }, [selected, visit]);
 
   const match = matches.find((m) => m.id === selected);
   const p = match?.partner;
