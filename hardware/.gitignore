@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+pi/config.json
+pi/window_state.json
+.DS_Store

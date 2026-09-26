@@ -30,7 +30,7 @@ What happens once it's set up:
 Supabase → **SQL Editor → New query**, paste, **Run**. All three are safe to run again.
 
 1. `supabase/schema.sql` (the app; you've already run this, re-run it if you haven't since the AI update)
-2. `window_sync_supabase_project/supabase/schema.sql` (Ansh's window tables)
+2. `hardware/supabase/schema.sql` (Ansh's window tables)
 3. `supabase/window_bridge.sql` (the connection)
 
 On a Mac you can copy each file with, for example:
@@ -44,9 +44,9 @@ Supabase → **Project Settings → API Keys → "Publishable and secret API key
 Pis. (The legacy **anon** key from the other tab also works.) Never put the `service_role` or secret key on a Pi.
 
 ### 3. Create a window pair (once)
-From Ansh's project folder on any laptop:
+From the repo's `hardware/` folder (Ansh's Pi code) on any laptop:
 ```bash
-python3 tools/app_cli.py --supabase-url https://iavzxfjnfacawojgzjwm.supabase.co --publishable-key sb_publishable_YOUR_KEY create-pair
+cd hardware && python3 tools/app_cli.py --supabase-url https://iavzxfjnfacawojgzjwm.supabase.co --publishable-key sb_publishable_YOUR_KEY create-pair
 ```
 It prints a `pair_id` (like `AB12CD34`) and a `pair_secret`. Keep the secret private: it goes only in
 the two Pis' `config.json` (which is git-ignored), not in chat or GitHub.
