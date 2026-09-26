@@ -34,6 +34,17 @@ export async function signIn(email: string, password: string): Promise<void> {
   }
 }
 
+/** The signed-in username (accounts use <username>@users.windowapp.dev behind the scenes). */
+export async function myUsername(): Promise<string | null> {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.email?.split('@')[0] ?? null;
+}
+
+/** Demo accounts only: resets sid + isha together to their preloaded history. */
+export async function resetDemo(): Promise<void> {
+  await api('/demo/reset', {});
+}
+
 export async function signOut(): Promise<void> {
   const { error } = await supabase.auth.signOut();
   if (error) fail(error, 'Could not sign out.');

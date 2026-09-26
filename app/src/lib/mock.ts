@@ -121,6 +121,12 @@ export async function signIn(email: string, password: string): Promise<void> {
   me = { ...demoMe };
   signedIn = true;
 }
+export async function myUsername(): Promise<string | null> {
+  return 'sid';
+}
+
+export async function resetDemo(): Promise<void> {}
+
 export async function signOut(): Promise<void> {
   signedIn = false;
 }

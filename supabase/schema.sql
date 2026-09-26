@@ -393,3 +393,11 @@ create table if not exists public.portraits (
 alter table public.portraits enable row level security;
 drop policy if exists pr_read on public.portraits;
 create policy pr_read on public.portraits for select to authenticated using (reader_id = auth.uid());
+
+-- ---------- demo accounts (sid + isha) ----------
+-- Letters, stamps and the portrait made by the demo-history script are marked here, so the
+-- "Reset demo" button (server POST /demo/reset) keeps them and removes only what came after.
+alter table public.windows add column if not exists demo_seed boolean not null default false;
+alter table public.stamps add column if not exists demo_seed boolean not null default false;
+alter table public.portraits add column if not exists demo_text text;
+alter table public.portraits add column if not exists demo_letters int;

@@ -136,6 +136,70 @@ def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
     return [{"city": city, "status": "matched", "match": {**inserted, "partner": partner}}]
 
 
+DEMO_USERNAMES = ("sid", "isha")  # same list as app/src/lib/config.ts DEMO_ACCOUNTS
+
+
+def demo_account_ids() -> dict[str, str]:
+    """username -> user id for the demo accounts that exist."""
+    ids: dict[str, str] = {}
+    for user in get_supabase().auth.admin.list_users(page=1, per_page=1000):
+        name = (user.email or "").split("@")[0]
+        if name in DEMO_USERNAMES:
+            ids[name] = user.id
+    return ids
+
+
+@app.post("/demo/reset")
+def demo_reset(_user: str = Depends(require_user)) -> dict[str, Any]:
+    """Either demo account can press this: puts sid + isha back to their preloaded history, together."""
+    sb = get_supabase()
+    ids = demo_account_ids()
+    if _user not in ids.values():
+        raise HTTPException(status_code=403, detail="Only the demo accounts can reset the demo.")
+    if len(ids) < 2:
+        raise HTTPException(status_code=409, detail="Both demo accounts (sid and isha) need to exist first.")
+    a, b = ids["sid"], ids["isha"]
+    pair = [m for m in rows("matches") if {m.get("user_a"), m.get("user_b")} == {a, b}]
+    if not pair:
+        raise HTTPException(status_code=409, detail="Match sid and isha with each other once first.")
+    m = max(pair, key=lambda item: item.get("created_at") or "")
+
+    # 1) they're each other's pen pal again (end anyone else they matched with while demoing)
+    for other in rows("matches"):
+        if other["id"] != m["id"] and other.get("status") in ("active", "paused") and {a, b} & {other.get("user_a"), other.get("user_b")}:
+            sb.table("matches").update({"status": "ended"}).eq("id", other["id"]).execute()
+    sb.table("matches").update({"status": "active"}).eq("id", m["id"]).execute()
+
+    # 2) letters sent after the preloaded history (their translations go with them)
+    live = [w for w in rows("windows", match_id=m["id"]) if not w.get("demo_seed")]
+    files = [p for w in live for p in (w.get("photo_path"), w.get("audio_path")) if p]
+    if live:
+        sb.table("windows").delete().eq("match_id", m["id"]).eq("demo_seed", False).execute()
+    if files:
+        try:
+            sb.storage.from_("media").remove(files)
+        except Exception:
+            pass  # leftover files are harmless
+
+    # 3) stamps, portraits and prompts back to how the history left them
+    sb.table("stamps").delete().eq("match_id", m["id"]).eq("demo_seed", False).execute()
+    for portrait in rows("portraits", match_id=m["id"]):
+        query = sb.table("portraits")
+        if portrait.get("demo_text"):
+            query.update({"text": portrait["demo_text"], "letters": portrait.get("demo_letters") or 0}).eq("match_id", m["id"]).eq("reader_id", portrait["reader_id"]).execute()
+        else:
+            query.delete().eq("match_id", m["id"]).eq("reader_id", portrait["reader_id"]).execute()
+    kept_prompts = {w.get("prompt_id") for w in rows("windows", match_id=m["id"]) if w.get("prompt_id")}
+    for prompt in rows("daily_prompts", match_id=m["id"]):
+        if prompt["id"] not in kept_prompts:
+            sb.table("daily_prompts").delete().eq("id", prompt["id"]).execute()
+
+    # 4) no knocks between them, and nobody left mid-replay
+    sb.table("knocks").delete().in_("from_user", [a, b]).in_("to_user", [a, b]).execute()
+    sb.table("profiles").update({"replay": False, "looking_at": None}).in_("id", [a, b]).execute()
+    return {"ok": True, "letters_removed": len(live)}
+
+
 LOOKING_WINDOW = timedelta(minutes=10)
 
 

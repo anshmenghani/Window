@@ -9,4 +9,5 @@ export const {
   watchInbox, sendKnock, getItinerary, reportUser,
   getTodayPrompt, getBond, getStamps, getPortrait,
   getPhysicalWindow, testPhysicalWindow,
+  myUsername, resetDemo,
 } = src;

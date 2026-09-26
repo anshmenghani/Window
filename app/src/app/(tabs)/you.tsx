@@ -1,12 +1,13 @@
 // You & safety: the answer to "is this safe with strangers?" Judges will ask.
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Modal, Pressable, Switch, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { TAB_BAR_SPACE } from '@/components/TabBar';
 import { LocationIcon, LockIcon, ShieldIcon } from '@/components/Icons';
 import { Button, Chip, Ledger, T, TextLink } from '@/components/ui';
-import { getMatches, getPhysicalWindow, reportUser, saveProfile, setMatchStatus, signOut, testPhysicalWindow } from '@/lib/data';
+import { getMatches, getPhysicalWindow, myUsername, reportUser, resetDemo, saveProfile, setMatchStatus, signOut, testPhysicalWindow } from '@/lib/data';
+import { DEMO_ACCOUNTS } from '@/lib/config';
 import { useSession } from '@/lib/session';
 import { languageName } from '@/lib/cities';
 import { dayNumber, timeAgo } from '@/lib/time';
@@ -23,6 +24,11 @@ export default function You() {
   const [target, setTarget] = useState<string | null>(null);
   const [reason, setReason] = useState<string | null>(null);
   const [reported, setReported] = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  useEffect(() => {
+    myUsername().then((name) => setIsDemo(!!name && DEMO_ACCOUNTS.includes(name))).catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     // One pen pal at a time
@@ -140,6 +146,40 @@ export default function You() {
         />
         <TextLink danger title="Report or block someone" onPress={() => setReporting(true)} style={{ marginTop: 14 }} />
       </View>
+
+      {isDemo ? (
+        <View style={{ gap: 6 }}>
+          <Ledger label="Demo" />
+          <T variant="small">Resets sid and isha together: keeps the preloaded letters and removes everything sent after them.</T>
+          <TextLink
+            danger
+            disabled={resetting}
+            title={resetting ? 'Resetting…' : 'Reset demo'}
+            style={{ marginTop: 4 }}
+            onPress={() =>
+              Alert.alert('Reset the demo?', 'This resets both sid and isha: live letters, new stamps and knocks are removed. The preloaded history stays.', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Reset both',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setResetting(true);
+                    try {
+                      await resetDemo();
+                      await refresh();
+                      router.replace('/today');
+                    } catch (e) {
+                      Alert.alert('Could not reset', e instanceof Error ? e.message : 'Please try again.');
+                    } finally {
+                      setResetting(false);
+                    }
+                  },
+                },
+              ])
+            }
+          />
+        </View>
+      ) : null}
 
       <TextLink
         title="Log out"
