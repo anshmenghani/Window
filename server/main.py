@@ -82,8 +82,15 @@ def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
     current = [m for m in existing if _user in (m.get("user_a"), m.get("user_b"))]
     if current:
         m = max(current, key=lambda item: item.get("created_at") or "")
-        sb.table("profiles").update({"looking_at": None}).eq("id", _user).execute()
         partner = profile(m["user_b"] if m["user_a"] == _user else m["user_a"])
+        # A demo account replaying sign-up keeps its match (and letters), but the match is revealed
+        # live again: if the partner is replaying too, wait until they're on the matching screen.
+        if me.get("replay") and partner.get("replay") and not is_looking(partner, now):
+            return [{"city": m["city"], "status": "waiting"}]
+        done: dict[str, Any] = {"looking_at": None}
+        if me.get("replay"):
+            done["replay"] = False
+        sb.table("profiles").update(done).eq("id", _user).execute()
         return [{"city": m["city"], "status": "matched", "match": {**m, "partner": partner}}]
 
     blocked = rows("blocks")

@@ -30,7 +30,8 @@ async function demoSignUp(name: string, password: string) {
     } catch {
       throw new Error(`"${name}" is a demo account. Use its usual password to go through sign-up again.`);
     }
-    await saveProfile({ onboarded: false });
+    // replay: the matching screen reveals your existing pen pal live again (letters are kept)
+    await saveProfile({ onboarded: false, replay: true });
   }
 }
 

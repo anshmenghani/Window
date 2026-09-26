@@ -5,6 +5,8 @@ export type Profile = {
   home_city: string; country: string; tz: string; lat: number; lng: number;
   interests: string[]; dream_places: string[];
   mutual_dreams: boolean; hide_contact: boolean; onboarded: boolean;
+  /** demo accounts replaying sign-up: their match is revealed live again */
+  replay?: boolean;
   location_verified?: boolean; // set only by the server after a one-time location check
 };
 

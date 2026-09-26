@@ -136,6 +136,8 @@ alter table public.profiles add column if not exists location_verified_at timest
 -- Live matching: set by the server while someone is on the matching screen. People are only
 -- matched with others who were looking in the last few minutes (so old or idle accounts never match).
 alter table public.profiles add column if not exists looking_at timestamptz;
+-- Demo accounts replaying sign-up: their existing match is revealed again live (see server /match)
+alter table public.profiles add column if not exists replay boolean not null default false;
 
 -- Only the server (service role) may mark someone verified. Changing your home city resets it.
 create or replace function public.protect_location_verification() returns trigger
