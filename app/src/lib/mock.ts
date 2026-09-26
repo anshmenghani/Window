@@ -3,7 +3,7 @@
 import * as Crypto from 'expo-crypto';
 import { bondFrom } from './bond';
 import type {
-  Bond, DailyPrompt, MemoryStamp, Portrait,
+  Bond, DailyPrompt, MemoryStamp, PhysicalWindow, Portrait,
   Profile, Match, MatchResult, WindowItem, WindowProgress, Knock, ItineraryStop, SendWindowInput, LocationCheck,
 } from './types';
 
@@ -320,4 +320,17 @@ export async function getPortrait(matchId: string): Promise<Portrait | null> {
     letters: windows.filter((w) => w.match_id === matchId).length,
     updated_at: daysAgo(0),
   };
+}
+
+// ---------- the physical window (Raspberry Pi) ----------
+export async function getPhysicalWindow(): Promise<PhysicalWindow> {
+  await wait(300);
+  return {
+    linked: true, side: 'A', online: true, last_seen: new Date(Date.now() - 12000).toISOString(),
+    light_timezone: 'Asia/Tokyo', partner_linked: true, partner_online: true,
+    partner_last_seen: new Date(Date.now() - 20000).toISOString(), pen_pals_active: true,
+  };
+}
+export async function testPhysicalWindow(): Promise<void> {
+  await wait(400);
 }

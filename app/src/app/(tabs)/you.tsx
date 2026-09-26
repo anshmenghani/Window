@@ -6,12 +6,12 @@ import { Screen } from '@/components/Screen';
 import { TAB_BAR_SPACE } from '@/components/TabBar';
 import { LocationIcon, LockIcon, ShieldIcon } from '@/components/Icons';
 import { Button, Chip, Ledger, T, TextLink } from '@/components/ui';
-import { getMatches, reportUser, saveProfile, setMatchStatus, signOut } from '@/lib/data';
+import { getMatches, getPhysicalWindow, reportUser, saveProfile, setMatchStatus, signOut, testPhysicalWindow } from '@/lib/data';
 import { useSession } from '@/lib/session';
 import { languageName } from '@/lib/cities';
-import { dayNumber } from '@/lib/time';
+import { dayNumber, timeAgo } from '@/lib/time';
 import { colors, fonts, radius } from '@/lib/theme';
-import type { Match } from '@/lib/types';
+import type { Match, PhysicalWindow } from '@/lib/types';
 
 const REASONS = ['Made me uncomfortable', 'Asked for money or personal info', 'Inappropriate photo or words', 'Spam or fake account'];
 
@@ -116,6 +116,8 @@ export default function You() {
         ) : null}
       </View>
 
+      <WindowSection partner={matches[0]} />
+
       <View>
         <Ledger label="Safety" />
         <SafetyRow icon={<LocationIcon size={18} color={colors.muted} />} title="City-level location only" sub="Your exact location is never shared" right={<AlwaysOn />} />
@@ -196,4 +198,105 @@ function SafetyRow({ icon, title, sub, right }: { icon: React.ReactNode; title: 
 
 function AlwaysOn() {
   return <Text style={{ fontFamily: fonts.medium, fontSize: 12, color: colors.muted }}>Always on</Text>;
+}
+
+/** "Your window": is the physical window on your windowsill connected, and your pen pal's? */
+function WindowSection({ partner }: { partner?: Match }) {
+  const [status, setStatus] = useState<PhysicalWindow | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
+
+  const check = useCallback(() => {
+    getPhysicalWindow().then(setStatus).catch(() => setStatus({ linked: false }));
+  }, []);
+  // check now, then every 15 s while this tab is open (the window checks in every 30 s)
+  useFocusEffect(
+    useCallback(() => {
+      check();
+      const id = setInterval(check, 15000);
+      return () => clearInterval(id);
+    }, [check]),
+  );
+
+  const test = async () => {
+    setTesting(true);
+    setNote(null);
+    try {
+      await testPhysicalWindow();
+      setNote({ text: status?.online ? 'Your window should knock three times now.' : 'Sent. It will knock as soon as your window comes back online.' });
+    } catch (e) {
+      setNote({ text: e instanceof Error ? e.message : 'Could not reach your window.', bad: true });
+    } finally {
+      setTesting(false);
+      check();
+    }
+  };
+
+  const name = partner?.partner.name ?? 'Your pen pal';
+  const lightCity = status?.light_timezone && partner && status.light_timezone === partner.partner.tz
+    ? partner.partner.home_city
+    : status?.light_timezone?.split('/').pop()?.replace(/_/g, ' ');
+
+  return (
+    <View style={{ gap: 12 }}>
+      <Ledger label="Your window" note={status?.linked && status.side ? `Window ${status.side}` : undefined} />
+      {!status ? (
+        <T variant="small">Checking…</T>
+      ) : !status.linked ? (
+        <T variant="small" style={{ fontSize: 14 }}>
+          No physical window is linked to your account. If you and your pen pal have Window frames, they're linked to your accounts when they're set up.
+        </T>
+      ) : (
+        <>
+          <WindowRow
+            title="Your window"
+            online={!!status.online}
+            detail={status.online
+              ? `Online · checked in ${timeAgo(status.last_seen ?? new Date().toISOString())}${lightCity ? ` · light showing ${lightCity} time` : ''}`
+              : status.last_seen
+                ? `Offline · last heard from ${timeAgo(status.last_seen)}. Check its power and Wi-Fi.`
+                : 'Not heard from yet. Turn it on and connect it to Wi-Fi.'}
+          />
+          <WindowRow
+            title={`${name}'s window`}
+            online={!!status.partner_online}
+            muted={!status.partner_linked}
+            detail={!status.partner_linked
+              ? 'Not linked yet'
+              : status.partner_online
+                ? 'Online'
+                : status.partner_last_seen ? `Offline · last heard from ${timeAgo(status.partner_last_seen)}` : 'Not heard from yet'}
+          />
+          {status.partner_linked && status.pen_pals_active === false ? (
+            <T variant="small" style={{ color: colors.walnut }}>Knocks between the windows are paused while your pen pal window is paused.</T>
+          ) : null}
+          <View style={{ flexDirection: 'row', gap: 18, alignItems: 'center' }}>
+            <TextLink title={testing ? 'Knocking…' : 'Knock on my window'} onPress={test} disabled={testing} />
+            <TextLink title="Check again" onPress={check} />
+          </View>
+          {note ? <T variant="small" style={{ color: note.bad ? colors.terracotta : colors.ok }}>{note.text}</T> : null}
+        </>
+      )}
+    </View>
+  );
+}
+
+function WindowRow({ title, detail, online, muted }: { title: string; detail: string; online: boolean; muted?: boolean }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      {/* a small lamp: lit when the window is online */}
+      <View
+        style={[
+          { width: 12, height: 12, borderRadius: 6 },
+          online
+            ? { backgroundColor: colors.amber, shadowColor: colors.amber, shadowOpacity: 0.7, shadowRadius: 5, shadowOffset: { width: 0, height: 0 } }
+            : { borderWidth: 1.5, borderColor: muted ? colors.line : colors.dash },
+        ]}
+      />
+      <View style={{ flex: 1 }}>
+        <T style={{ fontFamily: fonts.semibold, fontSize: 15, color: muted ? colors.muted : colors.ink }}>{title}</T>
+        <T variant="small">{detail}</T>
+      </View>
+    </View>
+  );
 }

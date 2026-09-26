@@ -55,6 +55,9 @@ declare
   v_from uuid;
   v_to uuid;
 begin
+  if current_setting('window_bridge.test_knock', true) = 'on' then
+    return new; -- a "Knock on my window" test from the app always goes through
+  end if;
   select user_id into v_from from public.window_sides where pair_id = new.pair_id and side = new.sender_side;
   select user_id into v_to from public.window_sides where pair_id = new.pair_id and side <> new.sender_side;
   if v_from is not null and v_to is not null and not public.window_bridge_active(v_from, v_to) then
@@ -83,7 +86,8 @@ declare
   v_pattern jsonb;
 begin
   -- this knock was just copied here FROM the app (below): don't copy it back, or it arrives twice
-  if current_setting('window_bridge.copying_from_app', true) = 'on' then
+  if current_setting('window_bridge.copying_from_app', true) = 'on'
+     or current_setting('window_bridge.test_knock', true) = 'on' then
     return new;
   end if;
 
@@ -240,6 +244,130 @@ begin
   );
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Connection status for the app's "Your window" section (You tab).
+-- Each Pi calls window_get_partner when it starts and every 30 s to refresh its light, so this
+-- file re-defines that function to also note "this window was just heard from". Same inputs and
+-- output as Ansh's version. (That's why this file must run AFTER his schema.)
+-- ---------------------------------------------------------------------------
+alter table public.window_sides add column if not exists last_seen_at timestamptz;
+
+create or replace function public.window_get_partner(
+    p_pair_id text,
+    p_pair_secret text,
+    p_side text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_side text := upper(p_side);
+    v_partner text;
+    v_timezone text;
+    v_updated timestamptz;
+begin
+    perform public.window_assert_pair(p_pair_id, p_pair_secret);
+
+    if v_side not in ('A', 'B') then
+        raise exception 'Side must be A or B';
+    end if;
+
+    -- heartbeat: this window is on and online
+    update public.window_sides set last_seen_at = now()
+    where pair_id = p_pair_id and side = v_side;
+
+    v_partner := case when v_side = 'A' then 'B' else 'A' end;
+
+    select timezone, timezone_updated_at
+      into v_timezone, v_updated
+    from public.window_sides
+    where pair_id = p_pair_id
+      and side = v_partner;
+
+    return jsonb_build_object(
+        'partner_side', v_partner,
+        'timezone', v_timezone,
+        'timezone_updated_at', v_updated
+    );
+end;
+$$;
+revoke all on function public.window_get_partner(text, text, text) from public;
+grant execute on function public.window_get_partner(text, text, text) to anon, authenticated;
+
+-- What the signed-in app user can see about their own physical window and their pen pal's.
+-- A window counts as online if it checked in within the last 75 s (it checks in every 30 s).
+create or replace function public.window_status_for_me()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_me uuid := auth.uid();
+  v_mine public.window_sides%rowtype;
+  v_theirs public.window_sides%rowtype;
+begin
+  if v_me is null then
+    raise exception 'Sign in to check your window.';
+  end if;
+
+  select * into v_mine from public.window_sides where user_id = v_me order by last_seen_at desc nulls last limit 1;
+  if not found then
+    return jsonb_build_object('linked', false);
+  end if;
+  select * into v_theirs from public.window_sides where pair_id = v_mine.pair_id and side <> v_mine.side;
+
+  return jsonb_build_object(
+    'linked', true,
+    'side', v_mine.side,
+    'online', coalesce(v_mine.last_seen_at > now() - interval '75 seconds', false),
+    'last_seen', v_mine.last_seen_at,
+    'light_timezone', v_theirs.timezone,
+    'partner_linked', v_theirs.user_id is not null,
+    'partner_online', coalesce(v_theirs.last_seen_at > now() - interval '75 seconds', false),
+    'partner_last_seen', v_theirs.last_seen_at,
+    'pen_pals_active', v_theirs.user_id is not null and public.window_bridge_active(v_me, v_theirs.user_id)
+  );
+end;
+$$;
+revoke all on function public.window_status_for_me() from public, anon;
+grant execute on function public.window_status_for_me() to authenticated;
+
+-- "Knock on my window": makes the signed-in user's OWN window buzz three times, to check it.
+-- It's sent as if from the other side, so only this window plays it; it isn't copied to anyone's app.
+create or replace function public.window_test_my_window()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_me uuid := auth.uid();
+  v_pair text;
+  v_side text;
+begin
+  if v_me is null then
+    raise exception 'Sign in to test your window.';
+  end if;
+  select pair_id, side into v_pair, v_side from public.window_sides where user_id = v_me
+  order by last_seen_at desc nulls last limit 1;
+  if v_pair is null then
+    raise exception 'No physical window is linked to your account yet.';
+  end if;
+
+  perform set_config('window_bridge.test_knock', 'on', true);
+  insert into public.window_knocks (pair_id, sender_side, intervals_ms)
+  values (v_pair, case when v_side = 'A' then 'B' else 'A' end, array[0, 160, 160]);
+  perform set_config('window_bridge.test_knock', 'off', true);
+  return jsonb_build_object('ok', true, 'side', v_side);
+end;
+$$;
+revoke all on function public.window_test_my_window() from public, anon;
+grant execute on function public.window_test_my_window() to authenticated;
 
 -- These are for the SQL Editor and the triggers only, never for the app or the Pis.
 revoke all on function public.window_link(text, text, text) from public, anon, authenticated;

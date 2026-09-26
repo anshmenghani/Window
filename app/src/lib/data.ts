@@ -8,4 +8,5 @@ export const {
   newWindowId, sendWindow, watchWindow, getToday, getWindow, saveWindow, getWall,
   watchInbox, sendKnock, getItinerary, reportUser,
   getTodayPrompt, getBond, getStamps, getPortrait,
+  getPhysicalWindow, testPhysicalWindow,
 } = src;

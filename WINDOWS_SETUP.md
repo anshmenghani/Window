@@ -78,6 +78,11 @@ python daemon.py --config config.json
 No hardware yet? Add `--simulate` and press Enter to send a test knock.
 
 ### 6. Check it works
+In the app: **You tab → Your window.** It shows whether your window and your pen pal's are online
+(a lit lamp means the window checked in within the last minute; each Pi checks in every 30 s),
+which time zone your light is showing, and a **Knock on my window** button that makes *your own*
+window knock three times (it doesn't reach your pen pal). Then:
+
 1. Knock on window A → window B buzzes, and Aiko's phone shows the knock banner.
 2. On Aiko's phone, tap a rhythm on the knock rail → window A buzzes.
 3. Look at the Pi logs: `[light] partner timezone=Asia/Tokyo` on A, `America/New_York` on B.
@@ -97,6 +102,8 @@ No hardware yet? Add `--simulate` and press Enter to send a test knock.
 | Window light stays on UTC colors | Not linked yet, or that person hasn't finished onboarding (no time zone) |
 | `Invalid pair credentials` | `pair_id` / `pair_secret` in `config.json` don't match what `create-pair` printed |
 | `HTTP 401` from the Pi | Wrong key in `supabase_publishable_key` |
+| You tab says "Offline" | The Pi is off, has no Wi-Fi, or its daemon isn't running (it checks in every 30 s) |
+| You tab says "No physical window is linked" | Step 4 wasn't run for this account, or the bridge SQL hasn't been run yet |
 
 To see how things are linked, run this in the SQL Editor:
 ```sql
@@ -112,5 +119,9 @@ select pair_id, side, user_id, timezone from public.window_sides order by pair_i
 - `app_knock_to_window` (after insert on `knocks`): copies `source = 'app'` knocks into `window_knocks` on the
   sender's side, converting back to gaps. A setting stops the copy from bouncing back into the app.
 - `window_follow_profile_tz` (after update of `profiles.tz`): keeps `window_sides.timezone` in step.
+- Connection status: the bridge re-defines Ansh's `window_get_partner` (same inputs and output) to also set
+  `window_sides.last_seen_at`, because each Pi calls it every 30 s. So **run the bridge after Ansh's schema**;
+  re-running his schema later would undo the check-in (just re-run the bridge again).
+  The app calls `window_status_for_me()` and `window_test_my_window()` (signed-in users only).
 - Tested with the real app schema, Ansh's schema and his actual Pi daemon in simulate mode: knocks both ways,
   rhythm conversion, no duplicates, pause, time zones, unlinked pairs, re-running the SQL.

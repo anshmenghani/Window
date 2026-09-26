@@ -3,7 +3,7 @@ import { api } from './api';
 import { getPushToken } from './notifications';
 import { supabase } from './supabase';
 import { bondFrom } from './bond';
-import type { Bond, DailyPrompt, MemoryStamp, Portrait, ItineraryStop, Knock, LocationCheck, Match, MatchResult, Profile, SendWindowInput, WindowItem, WindowProgress, WindowStatus } from './types';
+import type { Bond, DailyPrompt, MemoryStamp, PhysicalWindow, Portrait, ItineraryStop, Knock, LocationCheck, Match, MatchResult, Profile, SendWindowInput, WindowItem, WindowProgress, WindowStatus } from './types';
 
 const fail = (error: { message?: string; code?: string } | null, fallback: string): never => {
   throw new Error(error?.message || fallback);
@@ -310,4 +310,23 @@ export async function getPortrait(matchId: string): Promise<Portrait | null> {
   const { data, error } = await supabase.from('portraits').select('text,letters,updated_at').eq('match_id', matchId).eq('reader_id', id).maybeSingle();
   if (error) fail(error, 'Could not load the portrait.');
   return data ? { text: data.text, letters: data.letters, updated_at: data.updated_at } : null;
+}
+
+// ---------- the physical window (Raspberry Pi), via supabase/window_bridge.sql ----------
+
+/** Is a physical window linked to me, and has it (and my pen pal's) checked in recently? */
+export async function getPhysicalWindow(): Promise<PhysicalWindow> {
+  const { data, error } = await supabase.rpc('window_status_for_me');
+  if (error) {
+    // the bridge SQL hasn't been run in this Supabase project yet
+    if (/does not exist|could not find the function/i.test(error.message)) return { linked: false };
+    fail(error, 'Could not check your window.');
+  }
+  return (data || { linked: false }) as PhysicalWindow;
+}
+
+/** Makes my own window knock three times, to check it's working. */
+export async function testPhysicalWindow(): Promise<void> {
+  const { error } = await supabase.rpc('window_test_my_window');
+  if (error) fail(error, 'Could not reach your window.');
 }

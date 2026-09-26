@@ -68,3 +68,12 @@ export type MemoryStamp = {
 
 /** "Aiko's Kyoto, as you know it": a short portrait built only from what they've shown you. */
 export type Portrait = { text: string; letters: number; updated_at: string };
+
+/** The physical window (Raspberry Pi) linked to your account, and your pen pal's. */
+export type PhysicalWindow = {
+  linked: boolean; side?: 'A' | 'B';
+  online?: boolean; last_seen?: string | null;
+  light_timezone?: string | null; // the time zone your window's light is showing (your pen pal's)
+  partner_linked?: boolean; partner_online?: boolean; partner_last_seen?: string | null;
+  pen_pals_active?: boolean;
+};
