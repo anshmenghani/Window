@@ -29,7 +29,8 @@ export default function Dreams() {
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const results = dreams.length < 3 ? searchCities(query, [home, ...dreams]) : [];
+  // picked cities and your home still show up in search (with a note), so nothing seems to vanish
+  const results = dreams.length < 3 ? searchCities(query) : [];
 
   const next = async () => {
     setBusy(true);
@@ -94,19 +95,26 @@ export default function Dreams() {
       {dreams.length < 3 ? (
         <View style={{ gap: 8 }}>
           <Field value={query} onChangeText={setQuery} placeholder="Search a city" left={<SearchIcon />} autoCorrect={false} inputStyle={{ height: 50 }} />
-          {results.map((c) => (
-            <Pressable
-              key={c.name}
-              onPress={() => {
-                setDreams((d) => [...d, c.name]);
-                setQuery('');
-              }}
-              style={({ pressed }) => [{ paddingVertical: 11, paddingHorizontal: 2, borderBottomWidth: 1, borderBottomColor: colors.line }, pressed && { opacity: 0.6 }]}
-            >
-              <T style={{ fontFamily: fonts.semibold }}>+ {c.name}, {c.country}</T>
-              <T variant="small">{clockLine(myTz, c.tz)}</T>
-            </Pressable>
-          ))}
+          {results.map((c) => {
+            const picked = dreams.includes(c.name);
+            const isHome = c.name === home;
+            return (
+              <Pressable
+                key={c.name}
+                disabled={picked || isHome}
+                onPress={() => {
+                  setDreams((d) => [...d, c.name]);
+                  setQuery('');
+                }}
+                style={({ pressed }) => [{ paddingVertical: 11, paddingHorizontal: 2, borderBottomWidth: 1, borderBottomColor: colors.line }, pressed && { opacity: 0.6 }]}
+              >
+                <T style={{ fontFamily: fonts.semibold, color: picked || isHome ? colors.muted : colors.ink }}>
+                  {picked ? '✓' : isHome ? '' : '+'} {c.name}, {c.country}
+                </T>
+                <T variant="small">{picked ? 'already one of your dream cities (below)' : isHome ? 'your home city' : clockLine(myTz, c.tz)}</T>
+              </Pressable>
+            );
+          })}
         </View>
       ) : null}
 
