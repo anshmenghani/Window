@@ -1,5 +1,5 @@
 // true = screens use fake data from mock.ts, false = real backend (real.ts)
-export const USE_MOCKS = true;
+export const USE_MOCKS = false;
 
 // Location verification is required to finish onboarding. For the hackathon demo
 // (teammates playing locals in other cities) this shows a "Skip for now" option.
