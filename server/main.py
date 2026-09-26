@@ -1,7 +1,7 @@
 import asyncio
 import hmac
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -71,6 +71,9 @@ def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
     me = profile(_user)
     if not me.get("onboarded"):
         raise HTTPException(status_code=409, detail="Finish your profile before finding a match.")
+    now = datetime.now(timezone.utc)
+    # Being on the matching screen marks you as looking, so others searching for your city can find you
+    sb.table("profiles").update({"looking_at": now.isoformat()}).eq("id", _user).execute()
     my_vec = me.get("interest_vec") or ai.embed_interests(me.get("interests") or [])
     if not me.get("interest_vec"):
         sb.table("profiles").update({"interest_vec": my_vec}).eq("id", _user).execute()
@@ -79,6 +82,7 @@ def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
     current = [m for m in existing if _user in (m.get("user_a"), m.get("user_b"))]
     if current:
         m = max(current, key=lambda item: item.get("created_at") or "")
+        sb.table("profiles").update({"looking_at": None}).eq("id", _user).execute()
         partner = profile(m["user_b"] if m["user_a"] == _user else m["user_a"])
         return [{"city": m["city"], "status": "matched", "match": {**m, "partner": partner}}]
 
@@ -91,6 +95,8 @@ def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
         for candidate in rows("profiles", home_city=city, onboarded=True):
             candidate_id = candidate.get("id")
             if not candidate_id or candidate_id == _user or candidate_id in occupied:
+                continue
+            if not is_looking(candidate, now):
                 continue
             if (_user, candidate_id) in blocked_pairs or (candidate_id, _user) in blocked_pairs:
                 continue
@@ -119,7 +125,23 @@ def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
             partner = profile(inserted["user_b"] if inserted["user_a"] == _user else inserted["user_a"])
             return [{"city": inserted["city"], "status": "matched", "match": {**inserted, "partner": partner}}]
         return [{"city": dream, "status": "waiting"} for dream in dreams]
+    sb.table("profiles").update({"looking_at": None}).in_("id", [_user, partner["id"]]).execute()
     return [{"city": city, "status": "matched", "match": {**inserted, "partner": partner}}]
+
+
+LOOKING_WINDOW = timedelta(minutes=10)
+
+
+def is_looking(candidate: dict[str, Any], now: datetime) -> bool:
+    """Only people who opened the matching screen in the last 10 minutes can be matched."""
+    raw = candidate.get("looking_at")
+    if not raw:
+        return False
+    try:
+        since = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return now - since <= LOOKING_WINDOW
 
 
 VERIFY_RADIUS_KM = 80
