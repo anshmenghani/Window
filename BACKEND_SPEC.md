@@ -10,6 +10,7 @@ HackGT 13 · hacking ends **Sun Sep 27, 8:00 AM** · 4-person team
 > **Never commit keys.** `.env` files are gitignored. Commit messages are plain descriptions, with no AI co-author trailers.
 
 ## Changelog (newest first)
+- **Sat 9:30 AM · Sid: PHYSICAL WINDOWS CONNECTED.** The hardware is Raspberry Pis running Ansh's `window_sync_supabase_project` (accelerometer knocks, buzzer, RGB time-of-day light) with its own tables (`window_pairs`, `window_sides`, `window_knocks`) and pair-secret RPCs. **New `supabase/window_bridge.sql`** connects it to the app inside the database; no Pi or app code changes. Run it after the app schema and Ansh's schema, then `select public.window_link('<pair_id>', 'sid', 'aiko');`. Pi knocks appear in `knocks` (`source 'window'`), app knocks buzz the partner's Pi, rhythms are converted (Pi = gaps, app = times since the first knock), window lights follow `profiles.tz`, and paused/ended pen pals' windows stop knocking. Full steps: **`WINDOWS_SETUP.md`**. The app's knock banner now adds "on the window in <city>" for knocks from a physical window.
 - **Sat 7:45 AM · Sid: AI THAT GROWS WITH THE FRIENDSHIP.** Four features that make the AI about the relationship, not just single windows. **Re-run `schema.sql`** (safe) and redeploy the server (Render does it on push).
   - **Write-back prompts:** the translation call now also returns `reply_prompt` (one line in the reader's language suggesting how to answer with your own world). Stored on `window_translations.reply_prompt`; `WindowItem.reply_prompt`. No extra AI call.
   - **Daily shared prompt:** `POST /prompt {match_id}` → `DailyPrompt {id, match_id, prompt_date, text, why, level, answered_by_me, answered_by_them}` in the caller's language. Written once per pair per UTC day (gpt-4o-mini) from shared interests, recent letters and the bond level; never repeats a recent theme; never asks for faces/home/school/identifying things. New table `daily_prompts` (text/why/stamp in both people's languages, `_a`/`_b` = `matches.user_a`/`user_b`). A window can answer it: `windows.prompt_id` (set on insert via `SendWindowInput.promptId`; a trigger drops ids from another match; clients can't change it later).
@@ -419,6 +420,8 @@ Verify the caller is the window's sender. Return immediately and run the pipelin
 ---
 
 ## 10. Hardware interface (for the Pi pair; you just need the DB side ready)
+
+> **Superseded (Sat 9:30 AM):** the Pis use Ansh's own tables and RPCs, connected to the app by `supabase/window_bridge.sql`. See `WINDOWS_SETUP.md`. The notes below describe the earlier plan.
 
 Each physical window is a Raspberry Pi logged into Supabase **as a normal user**, the person who owns that window:
 - **Window 1** = Sid's account (in Atlanta)

@@ -15,7 +15,7 @@ import { Brass, PaperGrain } from '@/components/materials';
 import { RhythmMarks } from '@/components/KnockPad';
 
 type Banner =
-  | { kind: 'knock'; knock: Knock; name: string }
+  | { kind: 'knock'; knock: Knock; name: string; city: string }
   | { kind: 'window'; window: WindowItem; name: string; city: string };
 
 type Inbox = {
@@ -69,7 +69,7 @@ export function InboxProvider({ children }: { children: ReactNode }) {
         playKnockHaptics(k.pattern);
         setKnocks((n) => n + 1);
         const p = await partnerName(k.from_user);
-        show({ kind: 'knock', knock: k, name: p.name });
+        show({ kind: 'knock', knock: k, ...p });
       },
     });
     return stop;
@@ -102,7 +102,13 @@ export function InboxProvider({ children }: { children: ReactNode }) {
                 {banner.kind === 'knock' ? `${banner.name} knocked` : `${banner.name}'s window arrived`}
               </Text>
               {banner.kind === 'knock' ? (
-                <RhythmMarks pattern={banner.knock.pattern} color={colors.terracotta} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <RhythmMarks pattern={banner.knock.pattern} color={colors.terracotta} />
+                  {/* knocked on the real, physical window (the Raspberry Pi) */}
+                  {banner.knock.source === 'window' && banner.city ? (
+                    <Text style={{ fontFamily: fonts.body, fontSize: 12, color: colors.muted }}>on the window in {banner.city}</Text>
+                  ) : null}
+                </View>
               ) : (
                 <Text style={{ fontFamily: fonts.body, fontSize: 13, color: colors.muted }}>A new window from {banner.city}</Text>
               )}
