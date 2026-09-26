@@ -5,7 +5,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Screen, Spacer } from '@/components/Screen';
 import { PinIcon } from '@/components/Icons';
-import { Button, Chip, Field, StepHeader, T } from '@/components/ui';
+import { AddOwn, Button, Chip, Field, StepHeader, T } from '@/components/ui';
 import { saveProfile, signOut } from '@/lib/data';
 import { useSession } from '@/lib/session';
 import { City, findCity, LANGUAGES, searchCities } from '@/lib/cities';
@@ -22,6 +22,15 @@ export default function About() {
   const [city, setCity] = useState<City | undefined>(findCity(profile?.home_city));
   const [query, setQuery] = useState(city ? `${city.name}, ${city.country}` : '');
   const [busy, setBusy] = useState(false);
+  const [other, setOther] = useState(false);
+  // languages you typed yourself are stored as their name ("Nepali")
+  const own = langs.filter((code) => !LANGUAGES.some((l) => l.code === code));
+  const addOwn = (text: string) => {
+    const known = LANGUAGES.find((l) => l.name.toLowerCase() === text.toLowerCase());
+    const code = known ? known.code : text;
+    setLangs((l) => (l.includes(code) ? l : [...l, code]));
+    if (known) setShowAll(true);
+  };
 
   const shown = showAll ? LANGUAGES : LANGUAGES.filter((l) => COMMON.includes(l.code) || langs.includes(l.code));
   const results = city && query === `${city.name}, ${city.country}` ? [] : searchCities(query);
@@ -73,8 +82,13 @@ export default function About() {
           {shown.map((l) => (
             <Chip key={l.code} small label={l.name} selected={langs.includes(l.code)} onPress={() => toggle(l.code)} />
           ))}
-          {!showAll ? <Chip small dashed label="+ Add" onPress={() => setShowAll(true)} /> : null}
+          {own.map((code) => (
+            <Chip key={code} small label={code} selected onPress={() => toggle(code)} />
+          ))}
+          {!showAll ? <Chip small dashed label="+ More" onPress={() => setShowAll(true)} /> : null}
+          {!other ? <Chip small dashed label="+ Other" onPress={() => setOther(true)} /> : null}
         </View>
+        {other ? <AddOwn placeholder="Type a language" onAdd={addOwn} onClose={() => setOther(false)} /> : null}
       </View>
 
       <View style={{ gap: 8 }}>

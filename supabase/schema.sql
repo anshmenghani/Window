@@ -43,9 +43,11 @@ create table if not exists public.windows (
   spot_lng double precision,
   local_date date not null,
   saved boolean not null default false,
-  created_at timestamptz not null default now(),
-  unique (match_id, sender_id, local_date)
+  created_at timestamptz not null default now()
 );
+-- Pen pals can send as many windows a day as they like (the old one-a-day rule is dropped)
+alter table public.windows drop constraint if exists windows_match_id_sender_id_local_date_key;
+create index if not exists idx_windows_match_created on public.windows(match_id, created_at desc);
 
 -- A window can answer the day's shared prompt (see daily_prompts below).
 alter table public.windows add column if not exists prompt_id uuid;

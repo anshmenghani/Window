@@ -182,9 +182,6 @@ export function newWindowId(): string {
 
 export async function sendWindow(input: SendWindowInput): Promise<void> {
   await wait(800);
-  if (sent.some((w) => w.match_id === input.matchId && w.local_date === input.localDate)) {
-    throw new Error("You already sent today's window.");
-  }
   sent.push({
     id: input.id, match_id: input.matchId, sender_id: 'me', recipient_id: input.recipientId,
     photo_url: input.photoUri, audio_url: input.audioUri, caption: input.caption, spot: input.spot,

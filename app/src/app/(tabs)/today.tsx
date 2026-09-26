@@ -167,7 +167,7 @@ export default function Today() {
                 title={`${main.partner.name}'s window`}
                 sub={t?.theirs ? `${main.partner.home_city} · left ${timeAgo(t.theirs.created_at)}` : `${main.partner.home_city} · on its way`}
               />
-              <MuseumLabel align="right" title="Your window" sub={t?.sentToday ? 'sent today ✓' : 'not sent yet'} />
+              <MuseumLabel align="right" title="Your window" sub={t?.sentToday ? 'sent today ✓ · tap for another' : 'not sent yet'} />
             </View>
           </View>
 
@@ -260,8 +260,7 @@ function YourWindow({ match, mine, sent, width }: { match: Match; mine?: WindowI
   const height = Math.round(width * 1.32);
   return (
     <Pressable
-      disabled={sent}
-      accessibilityLabel={sent ? 'Your window was sent today' : 'Take today\'s window'}
+      accessibilityLabel={sent ? 'Send another window' : 'Take today\'s window'}
       onPress={() => router.push({ pathname: '/capture', params: { match: match.id } })}
     >
       <Arch width={width} height={height} border={7} bottomRadius={4} bars={!mine} barWidth={4} glass>
@@ -277,7 +276,12 @@ function YourWindow({ match, mine, sent, width }: { match: Match; mine?: WindowI
             <CameraIcon size={22} color={colors.walnut} />
           </View>
         </View>
-      ) : null}
+      ) : (
+        // already sent one: a small camera in the corner to send another
+        <View pointerEvents="none" style={[{ position: 'absolute', right: -6, bottom: -6, width: 34, height: 34, borderRadius: 17, backgroundColor: colors.postcard, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.line }, shadow.soft]}>
+          <CameraIcon size={17} color={colors.walnut} />
+        </View>
+      )}
     </Pressable>
   );
 }

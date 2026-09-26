@@ -1,5 +1,5 @@
 // Shared building blocks: type, card-stock buttons, text links, label-tag selections, inputs, ledger headers.
-import { ReactNode, useEffect, useRef } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, TextInput, TextInputProps, TextProps,
   TextStyle, View, ViewStyle,
@@ -132,6 +132,33 @@ export function TextLink({
         {title}
       </Text>
     </Pressable>
+  );
+}
+
+/** "Other": a small box to type your own answer, with an Add link. Calls onAdd with the trimmed text. */
+export function AddOwn({ placeholder, onAdd, onClose }: { placeholder: string; onAdd: (text: string) => void; onClose: () => void }) {
+  const [value, setValue] = useState('');
+  const add = () => {
+    const text = value.trim().replace(/\s+/g, ' ').slice(0, 40);
+    if (text) onAdd(text);
+    setValue('');
+    onClose();
+  };
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+      <Field
+        style={{ flex: 1 }}
+        value={value}
+        onChangeText={setValue}
+        placeholder={placeholder}
+        autoFocus
+        autoCapitalize="words"
+        returnKeyType="done"
+        onSubmitEditing={add}
+        maxLength={40}
+      />
+      <TextLink title={value.trim() ? 'Add' : 'Close'} onPress={value.trim() ? add : onClose} style={{ alignSelf: 'center' }} />
+    </View>
   );
 }
 

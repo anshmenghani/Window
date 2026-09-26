@@ -60,7 +60,7 @@ export default function Welcome() {
       <View style={{ gap: 10 }}>
         <T variant="display">See the world through someone&apos;s window.</T>
         <T variant="muted" style={{ fontSize: 16, lineHeight: 23 }}>
-          One photo a day from a real person in the place you dream about. Translated, explained, and just for you.
+          Photos and voice notes from a real person in the place you dream about. Translated, explained, and just for you.
         </T>
       </View>
 

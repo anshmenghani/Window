@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Screen, Spacer } from '@/components/Screen';
-import { Button, Chip, StepHeader, T } from '@/components/ui';
+import { AddOwn, Button, Chip, StepHeader, T } from '@/components/ui';
 import { saveProfile } from '@/lib/data';
 import { useSession } from '@/lib/session';
 import { INTERESTS } from '@/lib/cities';
@@ -13,6 +13,10 @@ export default function Interests() {
   const { profile, refresh } = useSession();
   const [picked, setPicked] = useState<string[]>(profile?.interests ?? []);
   const [busy, setBusy] = useState(false);
+  const [other, setOther] = useState(false);
+  // your own interests (typed under Other) show as tags next to the usual ones
+  const own = picked.filter((p) => !INTERESTS.some((i) => i.toLowerCase() === p.toLowerCase()));
+  const addOwn = (text: string) => setPicked((p) => (p.some((x) => x.toLowerCase() === text.toLowerCase()) ? p : [...p, text]));
 
   const toggle = (label: string) =>
     setPicked((p) => (p.includes(label) ? p.filter((x) => x !== label) : [...p, label]));
@@ -41,7 +45,12 @@ export default function Interests() {
             <Chip label={label} selected={picked.includes(label)} onPress={() => toggle(label)} />
           </Animated.View>
         ))}
+        {own.map((label) => (
+          <Chip key={label} label={label} selected onPress={() => toggle(label)} />
+        ))}
+        {!other ? <Chip dashed label="+ Other" onPress={() => setOther(true)} /> : null}
       </View>
+      {other ? <AddOwn placeholder="Type your own" onAdd={addOwn} onClose={() => setOther(false)} /> : null}
       <Spacer />
       <View style={{ gap: 12 }}>
         <T variant="muted" style={{ textAlign: 'center', fontSize: 14 }}>
