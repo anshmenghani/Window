@@ -1,6 +1,8 @@
+import io
 import json
 import os
 import re
+import time
 from typing import Any
 
 import httpx
@@ -13,6 +15,84 @@ from prompts import (
 
 def client() -> OpenAI:
     return OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+
+# ---------- providers: Meta's Muse models first, OpenAI as the backup ----------
+# AI_PROVIDER=meta plus META_API_KEY turns Meta on. Any Meta error, timeout or bad JSON falls back to
+# OpenAI for that one call, so a letter always gets through. Safety checks and interest embeddings
+# stay on OpenAI (Meta doesn't offer them).
+META_BASE_URL = "https://api.meta.ai/v1"
+META_CHAT_MODEL = "muse-spark-1.3"
+META_VOICE_MODEL = "muse-voice-transcribe-1.0"
+
+
+def meta_key() -> str | None:
+    if os.getenv("AI_PROVIDER", "openai").strip().lower() != "meta":
+        return None
+    return os.getenv("META_API_KEY") or os.getenv("MODEL_API_KEY") or None
+
+
+def provider() -> str:
+    return "meta" if meta_key() else "openai"
+
+
+def meta_client() -> OpenAI:
+    return OpenAI(base_url=META_BASE_URL, api_key=meta_key(), timeout=30, max_retries=1)
+
+
+def _log(job: str, used: str, started: float, note: str = "") -> None:
+    print(f"[ai] {job}: {used} in {time.time() - started:.1f}s{(' (' + note + ')') if note else ''}", flush=True)
+
+
+def chat(job: str, messages: list[dict[str, Any]], *, model: str, max_tokens: int, schema: dict[str, Any] | None = None,
+         json_object: bool = False, effort: str = "low") -> str:
+    """One chat call: Muse Spark when it's on, otherwise (or if it fails) the OpenAI model given."""
+    started = time.time()
+    if meta_key():
+        try:
+            meta_messages = [_meta_message(m) for m in messages]
+            extra: dict[str, Any] = {}
+            if schema is not None:
+                extra["response_format"] = {"type": "json_schema", "json_schema": {"name": job, "schema": schema}}
+            elif json_object:
+                extra["response_format"] = {"type": "json_object"}
+            # Muse Spark reasons before answering and that thinking counts toward the token limit,
+            # so it gets extra room on top of the answer's own budget.
+            response = meta_client().chat.completions.create(
+                model=META_CHAT_MODEL, messages=meta_messages, reasoning_effort=effort,
+                max_completion_tokens=max_tokens + 4000, **extra,
+            )
+            text = (response.choices[0].message.content or "").strip()
+            if not text:
+                raise ValueError("empty reply")
+            if schema is not None or json_object:
+                json.loads(text)
+            _log(job, "meta", started)
+            return text
+        except Exception as error:
+            _log(job, "meta failed, using openai", started, f"{type(error).__name__}: {str(error)[:200]}")
+            started = time.time()
+    extra = {}
+    if schema is not None:
+        extra["response_format"] = {"type": "json_schema", "json_schema": {"name": job, "strict": True, "schema": schema}}
+    elif json_object:
+        extra["response_format"] = {"type": "json_object"}
+    response = client().chat.completions.create(model=model, messages=messages, max_tokens=max_tokens, **extra)
+    _log(job, "openai", started)
+    return (response.choices[0].message.content or "").strip()
+
+
+def _meta_message(message: dict[str, Any]) -> dict[str, Any]:
+    """Meta takes the same messages, minus OpenAI's image `detail` option."""
+    content = message.get("content")
+    if not isinstance(content, list):
+        return message
+    parts = []
+    for part in content:
+        if part.get("type") == "image_url":
+            part = {"type": "image_url", "image_url": {"url": part["image_url"]["url"]}}
+        parts.append(part)
+    return {**message, "content": parts}
 
 
 def embed_interests(interests: list[str]) -> list[float]:
@@ -38,8 +118,8 @@ def distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 
 def fit_reason(me: dict[str, Any], them: dict[str, Any], shared: list[str], mutual: bool) -> str:
     request = f"Write one warm sentence of at most 25 words telling {me.get('name') or 'them'} why they and {them.get('name') or 'their match'} fit. Mention 2–3 genuinely shared interests from {shared}." + (f" Mention that {them.get('name') or 'they'} dreams of visiting {me.get('home_city')}." if mutual else "") + " Refer to the match by first name. No emojis."
-    result = client().chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": request}], max_tokens=80)
-    return (result.choices[0].message.content or "You share a curiosity for discovering new places.").strip()
+    text = chat("fit_reason", [{"role": "user", "content": request}], model="gpt-4o-mini", max_tokens=80, effort="minimal")
+    return text or "You share a curiosity for discovering new places."
 
 
 def moderate(caption: str, photo_url: str) -> bool:
@@ -50,9 +130,68 @@ def moderate(caption: str, photo_url: str) -> bool:
     return bool(response.results[0].flagged)
 
 
-def transcribe(audio: bytes) -> str:
+LANGUAGE_NAMES = {
+    "en": "English", "ja": "Japanese", "ko": "Korean", "zh": "Chinese", "es": "Spanish", "fr": "French",
+    "de": "German", "it": "Italian", "pt": "Portuguese", "hi": "Hindi", "ar": "Arabic", "ru": "Russian",
+    "nl": "Dutch", "tr": "Turkish", "vi": "Vietnamese", "th": "Thai", "id": "Indonesian", "pl": "Polish",
+}
+
+
+def transcribe(audio: bytes, languages: list[str] | None = None, keywords: list[str] | None = None) -> str:
+    """Voice note to text: Muse Voice Transcribe when it's on, otherwise (or if it fails) Whisper."""
+    started = time.time()
+    if meta_key():
+        try:
+            text = _meta_transcribe(audio, languages or [], keywords or [])
+            _log("transcribe", "meta", started)
+            return text
+        except Exception as error:
+            _log("transcribe", "meta failed, using openai", started, f"{type(error).__name__}: {str(error)[:200]}")
+            started = time.time()
     result = client().audio.transcriptions.create(model="whisper-1", file=("voice.m4a", audio, "audio/mp4"))
+    _log("transcribe", "openai", started)
     return result.text
+
+
+def to_wav(audio: bytes, rate: int = 24000) -> bytes:
+    """The phone records m4a; Muse Voice Transcribe takes mono 16-bit WAV (24 kHz is its native rate)."""
+    import wave
+
+    import av
+    pcm = bytearray()
+    with av.open(io.BytesIO(audio)) as container:
+        resampler = av.AudioResampler(format="s16", layout="mono", rate=rate)
+        for frame in container.decode(audio=0):
+            for out in resampler.resample(frame):
+                pcm += out.to_ndarray().tobytes()
+        for out in resampler.resample(None):
+            pcm += out.to_ndarray().tobytes()
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(rate)
+        wav.writeframes(bytes(pcm))
+    return buffer.getvalue()
+
+
+def _meta_transcribe(audio: bytes, languages: list[str], keywords: list[str]) -> str:
+    request: dict[str, Any] = {"mode": "PUSH_TO_TALK", "model": META_VOICE_MODEL, "audioEncoding": "WAV"}
+    bias = [LANGUAGE_NAMES[code.split("-")[0]] for code in languages if code.split("-")[0] in LANGUAGE_NAMES]
+    if bias:
+        request["languageBias"] = list(dict.fromkeys(bias))
+    words = [word for word in keywords if word]
+    if words:
+        request["keywords"] = list(dict.fromkeys(words))[:20]
+    response = httpx.post(
+        f"{META_BASE_URL}/asr/transcribe",
+        headers={"Authorization": f"Bearer {meta_key()}"},
+        files={"request": (None, json.dumps(request), "application/json"), "audio": ("voice.wav", to_wav(audio), "audio/wav")},
+        timeout=60,
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"HTTP {response.status_code}: {response.text[:200]}")
+    return (response.json().get("transcript") or "").strip()
 
 
 def hide_contact(text: str) -> str:
@@ -70,12 +209,11 @@ def translate_window(photo_url: str, caption: str, transcript: str | None, src: 
         {"type": "text", "text": f"Caption: {caption}\nTranscript: {transcript_text}"},
         {"type": "image_url", "image_url": {"url": photo_url, "detail": "high"}},
     ]
-    response = client().chat.completions.create(
-        model="gpt-4o", messages=[{"role": "system", "content": prompt}, {"role": "user", "content": content}],
-        response_format={"type": "json_schema", "json_schema": {"name": "window_translation", "strict": True, "schema": WINDOW_SCHEMA}},
-        max_tokens=800,
+    text = chat(
+        "window_translation", [{"role": "system", "content": prompt}, {"role": "user", "content": content}],
+        model="gpt-4o", max_tokens=800, schema=WINDOW_SCHEMA,
     )
-    parsed = json.loads(response.choices[0].message.content or "{}")
+    parsed = json.loads(text or "{}")
     for sticker in parsed.get("stickers", []):
         sticker["x"] = min(0.9, max(0.1, float(sticker.get("x", 0.5))))
         sticker["y"] = min(0.9, max(0.1, float(sticker.get("y", 0.5))))
@@ -103,12 +241,12 @@ def itinerary(windows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not windows:
         return []
     places = [{"spot": w.get("spot"), "caption": w.get("caption_t"), "note": w.get("context_note"), "date": w.get("local_date")} for w in windows]
-    response = client().chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "system", "content": 'Create 4–6 itinerary stops across 2 days using only place names in the supplied windows. Tips are short and in the partner\'s voice, reusing their words where possible. Return a JSON object with a "stops" array; each item has day (integer 1 or 2), place, and tip.'}, {"role": "user", "content": json.dumps(places, ensure_ascii=False)}],
-        response_format={"type": "json_object"}, max_tokens=700,
+    text = chat(
+        "itinerary",
+        [{"role": "system", "content": 'Create 4–6 itinerary stops across 2 days using only place names in the supplied windows. Tips are short and in the partner\'s voice, reusing their words where possible. Return a JSON object with a "stops" array; each item has day (integer 1 or 2), place, and tip.'}, {"role": "user", "content": json.dumps(places, ensure_ascii=False)}],
+        model="gpt-4o-mini", max_tokens=700, json_object=True,
     )
-    parsed = json.loads(response.choices[0].message.content or "{}")
+    parsed = json.loads(text or "{}")
     stops = parsed if isinstance(parsed, list) else parsed.get("stops", [])
     return stops[:6]
 
@@ -132,13 +270,8 @@ def bond_level(letters: int, together: int) -> int:
 
 
 def _json_call(system: str, user: str, schema: dict[str, Any], name: str, max_tokens: int = 400) -> dict[str, Any]:
-    response = client().chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-        response_format={"type": "json_schema", "json_schema": {"name": name, "strict": True, "schema": schema}},
-        max_tokens=max_tokens,
-    )
-    return json.loads(response.choices[0].message.content or "{}")
+    text = chat(name, [{"role": "system", "content": system}, {"role": "user", "content": user}], model="gpt-4o-mini", max_tokens=max_tokens, schema=schema)
+    return json.loads(text or "{}")
 
 
 def daily_prompt(a: dict[str, Any], b: dict[str, Any], level: int, recent_themes: list[str], recent_letters: list[str]) -> dict[str, Any]:
@@ -166,9 +299,9 @@ def localize(text: str, lang: str) -> str:
     """Short UI strings (stamp titles) into someone's language. English passes straight through."""
     if not text or lang.startswith("en"):
         return text
-    result = client().chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "system", "content": f"Translate this short passport-stamp title into {lang}. Keep names. Reply with the translation only."}, {"role": "user", "content": text}],
-        max_tokens=60,
+    result = chat(
+        "localize",
+        [{"role": "system", "content": f"Translate this short passport-stamp title into {lang}. Keep names. Reply with the translation only."}, {"role": "user", "content": text}],
+        model="gpt-4o-mini", max_tokens=60, effort="minimal",
     )
-    return (result.choices[0].message.content or text).strip()
+    return result or text

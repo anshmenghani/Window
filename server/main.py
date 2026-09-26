@@ -51,8 +51,8 @@ def profile(user_id: str) -> dict[str, Any]:
 
 
 @app.get("/health")
-def health() -> dict[str, bool]:
-    return {"ok": True}
+def health() -> dict[str, Any]:
+    return {"ok": True, "ai": ai.provider()}
 
 
 @app.post("/match")
@@ -189,7 +189,9 @@ def process_pipeline(window_id: str) -> None:
             with httpx.Client(timeout=45) as http:
                 response = http.get(audio_url)
                 response.raise_for_status()
-            transcript = ai.transcribe(response.content)
+            languages = (sender.get("languages") or []) + (recipient.get("languages") or [])
+            places = [sender.get("home_city"), (match_row or {}).get("city"), window.get("spot")]
+            transcript = ai.transcribe(response.content, languages, [p for p in places if p])
         steps["transcribed"] = True
         update_translation(window_id, {"transcript": transcript, "steps": steps})
 
