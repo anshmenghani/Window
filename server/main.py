@@ -64,37 +64,41 @@ def match(_user: str = Depends(require_user)) -> list[dict[str, Any]]:
     my_vec = me.get("interest_vec") or ai.embed_interests(me.get("interests") or [])
     if not me.get("interest_vec"):
         sb.table("profiles").update({"interest_vec": my_vec}).eq("id", _user).execute()
-    existing = rows("matches")
+    all_matches = rows("matches")
+    existing = [m for m in all_matches if m.get("status") in ("active", "paused")]
+    current = [m for m in existing if _user in (m.get("user_a"), m.get("user_b"))]
+    if current:
+        m = max(current, key=lambda item: item.get("created_at") or "")
+        partner = profile(m["user_b"] if m["user_a"] == _user else m["user_a"])
+        return [{"city": m["city"], "status": "matched", "match": {**m, "partner": partner}}]
+
     blocked = rows("blocks")
     blocked_pairs = {(b["blocker_id"], b["blocked_id"]) for b in blocked}
-    result: list[dict[str, Any]] = []
-    for city in (me.get("dream_places") or [])[:3]:
-        prior = [m for m in existing if m.get("city", "").casefold() == city.casefold() and m.get("status") in ("active", "paused") and _user in (m.get("user_a"), m.get("user_b"))]
-        if prior:
-            m = prior[0]
-            partner = profile(m["user_b"] if m["user_a"] == _user else m["user_a"])
-            result.append({"city": city, "status": "matched", "match": {**m, "partner": partner}})
-            continue
-        already = {m.get("user_b") for m in existing if m.get("user_a") == _user} | {m.get("user_a") for m in existing if m.get("user_b") == _user}
-        candidates = [p for p in rows("profiles", home_city=city, onboarded=True) if p.get("id") != _user and p.get("id") not in already and (_user, p.get("id")) not in blocked_pairs and (p.get("id"), _user) not in blocked_pairs]
-        scored: list[tuple[float, dict[str, Any], list[str], bool]] = []
-        for candidate in candidates:
+    occupied = {m.get("user_a") for m in existing} | {m.get("user_b") for m in existing}
+    dreams = (me.get("dream_places") or [])[:3]
+    scored: list[tuple[float, dict[str, Any], str, list[str], bool]] = []
+    for city in dreams:
+        for candidate in rows("profiles", home_city=city, onboarded=True):
+            candidate_id = candidate.get("id")
+            if not candidate_id or candidate_id == _user or candidate_id in occupied:
+                continue
+            if (_user, candidate_id) in blocked_pairs or (candidate_id, _user) in blocked_pairs:
+                continue
             their_vec = candidate.get("interest_vec") or ai.embed_interests(candidate.get("interests") or [])
             if not candidate.get("interest_vec"):
-                sb.table("profiles").update({"interest_vec": their_vec}).eq("id", candidate["id"]).execute()
+                sb.table("profiles").update({"interest_vec": their_vec}).eq("id", candidate_id).execute()
             mine = {x.casefold(): x for x in (me.get("interests") or [])}
             shared = [mine[x.casefold()] for x in candidate.get("interests", []) if x.casefold() in mine]
             mutual = bool(candidate.get("mutual_dreams", True) and me.get("home_city") in (candidate.get("dream_places") or []))
-            scored.append((ai.cosine(my_vec, their_vec) + (0.15 if mutual else 0), candidate, shared, mutual))
-        if not scored:
-            result.append({"city": city, "status": "waiting"})
-            continue
-        _, partner, shared, mutual = max(scored, key=lambda item: item[0])
-        reason = ai.fit_reason(me, partner, shared[:3], mutual)
-        inserted = sb.table("matches").insert({"user_a": _user, "user_b": partner["id"], "city": city, "reason": reason, "status": "active"}).execute().data[0]
-        existing.append(inserted)
-        result.append({"city": city, "status": "matched", "match": {**inserted, "partner": partner}})
-    return result
+            score = ai.cosine(my_vec, their_vec) + (0.15 if mutual else 0)
+            scored.append((score, candidate, city, shared, mutual))
+    if not scored:
+        return [{"city": city, "status": "waiting"} for city in dreams]
+
+    _, partner, city, shared, mutual = max(scored, key=lambda item: item[0])
+    reason = ai.fit_reason(me, partner, shared[:3], mutual)
+    inserted = sb.table("matches").insert({"user_a": _user, "user_b": partner["id"], "city": city, "reason": reason, "status": "active"}).execute().data[0]
+    return [{"city": city, "status": "matched", "match": {**inserted, "partner": partner}}]
 
 
 class ProcessRequest(BaseModel):

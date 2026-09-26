@@ -121,7 +121,14 @@ alter table public.knocks enable row level security;
 drop policy if exists k_read on public.knocks;
 create policy k_read on public.knocks for select to authenticated using (auth.uid() in (from_user,to_user));
 drop policy if exists k_ins on public.knocks;
-create policy k_ins on public.knocks for insert to authenticated with check (from_user=auth.uid());
+create policy k_ins on public.knocks for insert to authenticated with check (
+  from_user=auth.uid() and exists (
+    select 1 from public.matches m where m.status='active'
+      and auth.uid() in (m.user_a,m.user_b)
+      and to_user in (m.user_a,m.user_b)
+      and to_user <> auth.uid()
+  )
+);
 
 alter table public.reports enable row level security;
 drop policy if exists r_ins on public.reports;

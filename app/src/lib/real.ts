@@ -69,7 +69,7 @@ export async function getMatches(): Promise<Match[]> {
   const id = await currentUserId();
   const { data, error } = await supabase.from('matches').select('*').in('status', ['active', 'paused']).or(`user_a.eq.${id},user_b.eq.${id}`).order('created_at', { ascending: false });
   if (error) fail(error, 'Could not load your matches.');
-  const matches = data || [];
+  const matches = (data || []).slice(0, 1);
   const partnerIds = [...new Set(matches.map((m) => m.user_a === id ? m.user_b : m.user_a).filter(Boolean))] as string[];
   const profiles = partnerIds.length ? await supabase.from('profiles').select('*').in('id', partnerIds) : { data: [], error: null };
   if (profiles.error) fail(profiles.error, 'Could not load your match profiles.');
@@ -223,7 +223,11 @@ export function watchInbox(handlers: { onWindow: (window: WindowItem) => void; o
         const previous = payload.old as any;
         if (next.status === 'ready' && previous.status !== 'ready') void getWindow(next.window_id).then(handlers.onWindow).catch(() => undefined);
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'knocks', filter: `to_user=eq.${id}` }, (payload) => handlers.onKnock(payload.new as Knock))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'knocks', filter: `to_user=eq.${id}` }, (payload) => {
+        const knock = payload.new as Knock;
+        void supabase.from('matches').select('id').eq('status', 'active').or(`and(user_a.eq.${id},user_b.eq.${knock.from_user}),and(user_a.eq.${knock.from_user},user_b.eq.${id})`).limit(1)
+          .then(({ data: active }) => { if (active?.length) handlers.onKnock(knock); });
+      })
       .subscribe();
   });
   return () => { stopped = true; if (channel) void supabase.removeChannel(channel); };
@@ -231,6 +235,9 @@ export function watchInbox(handlers: { onWindow: (window: WindowItem) => void; o
 
 export async function sendKnock(toUser: string, pattern: number[]): Promise<void> {
   const from_user = await currentUserId();
+  const { data: active, error: matchError } = await supabase.from('matches').select('id').eq('status', 'active').or(`and(user_a.eq.${from_user},user_b.eq.${toUser}),and(user_a.eq.${toUser},user_b.eq.${from_user})`).limit(1);
+  if (matchError) fail(matchError, 'Could not check this pen pal.');
+  if (!active?.length) throw new Error('Knocks are available when your pen pal window is active.');
   const { error } = await supabase.from('knocks').insert({ from_user, to_user: toUser, source: 'app', pattern });
   if (error) fail(error, 'Could not send your knock.');
 }
