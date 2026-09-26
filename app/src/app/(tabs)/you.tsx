@@ -1,6 +1,6 @@
 // You & safety: the answer to "is this safe with strangers?" Judges will ask.
 import { useCallback, useState } from 'react';
-import { Modal, Pressable, Switch, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, Switch, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { TAB_BAR_SPACE } from '@/components/TabBar';
@@ -25,7 +25,8 @@ export default function You() {
   const [reported, setReported] = useState(false);
 
   const load = useCallback(() => {
-    getMatches().then((ms) => setMatches(ms.filter((m) => m.status !== 'ended')));
+    // One pen pal at a time
+    getMatches().then((ms) => setMatches(ms.filter((m) => m.status !== 'ended').slice(0, 1)));
   }, []);
   useFocusEffect(load);
 
@@ -35,6 +36,24 @@ export default function You() {
     const next = m.status === 'paused' ? 'active' : 'paused';
     setMatches((ms) => ms.map((x) => (x.id === m.id ? { ...x, status: next } : x)));
     await setMatchStatus(m.id, next).catch(load);
+  };
+
+  const endWindow = (m: Match) => {
+    Alert.alert(
+      `End your window with ${m.partner.name}?`,
+      `You'll stop sending each other windows, and we'll find you a new pen pal.`,
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'End window',
+          style: 'destructive',
+          onPress: async () => {
+            await setMatchStatus(m.id, 'ended').catch(() => {});
+            router.replace('/matching');
+          },
+        },
+      ],
+    );
   };
 
   const submitReport = async () => {
@@ -66,22 +85,32 @@ export default function You() {
       </View>
 
       <View style={{ gap: 8 }}>
-        <T variant="label" style={{ color: colors.muted }}>Your windows</T>
+        <T variant="label" style={{ color: colors.muted }}>Your pen pal</T>
         {matches.map((m) => (
-          <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderRadius: radius.md, backgroundColor: colors.white }}>
-            <View style={{ flex: 1 }}>
-              <T style={{ fontFamily: fonts.semibold }}>{m.partner.name} · {m.city}</T>
-              <T variant="small">Day {dayNumber(m.created_at)} · {m.status === 'paused' ? 'paused' : 'active'}</T>
+          <View key={m.id} style={{ gap: 12, padding: 14, borderRadius: radius.md, backgroundColor: colors.white }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <T style={{ fontFamily: fonts.semibold }}>{m.partner.name} · {m.city}</T>
+                <T variant="small">Day {dayNumber(m.created_at)} · {m.status === 'paused' ? 'paused' : 'active'}</T>
+              </View>
+              <Pressable
+                onPress={() => togglePause(m)}
+                style={({ pressed }) => [{ height: 36, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, justifyContent: 'center' }, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.ink }}>{m.status === 'paused' ? 'Resume' : 'Pause'}</Text>
+              </Pressable>
             </View>
-            <Pressable
-              onPress={() => togglePause(m)}
-              style={({ pressed }) => [{ height: 36, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, justifyContent: 'center' }, pressed && { opacity: 0.7 }]}
-            >
-              <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.ink }}>{m.status === 'paused' ? 'Resume' : 'Pause'}</Text>
+            <Pressable onPress={() => endWindow(m)} style={({ pressed }) => [{ alignSelf: 'flex-start', paddingVertical: 2 }, pressed && { opacity: 0.6 }]}>
+              <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.danger }}>End this window and find someone new</Text>
             </Pressable>
           </View>
         ))}
-        {!matches.length ? <T variant="small">No windows yet.</T> : null}
+        {!matches.length ? (
+          <View style={{ gap: 10 }}>
+            <T variant="small">No pen pal right now.</T>
+            <Button title="Find my window" onPress={() => router.push('/matching')} />
+          </View>
+        ) : null}
       </View>
 
       <View style={{ gap: 8 }}>

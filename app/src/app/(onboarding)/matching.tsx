@@ -14,7 +14,8 @@ import type { MatchResult } from '@/lib/types';
 
 export default function Matching() {
   const { profile } = useSession();
-  const city = profile?.dream_places[0] ?? 'your dream city';
+  const places = profile?.dream_places ?? [];
+  const city = places.length > 1 ? `${places.slice(0, -1).join(', ')} or ${places[places.length - 1]}` : places[0] ?? 'your dream city';
   const home = profile?.home_city ?? 'your city';
   const likes = (profile?.interests ?? []).slice(0, 2).map((s) => s.toLowerCase());
 
@@ -46,6 +47,7 @@ export default function Matching() {
   const first = results?.find((r) => r.status === 'matched' && r.match);
 
   const lines = [`People who live in ${city}`, 'Matching your interests', `Who dreams of ${home}?`];
+  const foundCity = first?.match?.city;
 
   return (
     <Screen dark bg={colors.ink} gap={30} style={{ alignItems: 'center', paddingHorizontal: 28, paddingTop: 36 }}>
@@ -59,11 +61,11 @@ export default function Matching() {
 
       <View style={{ gap: 10, alignItems: 'center' }}>
         <T variant="title" style={{ color: colors.postcard, textAlign: 'center', fontSize: 28 }}>
-          {done && !first ? `No one in ${city} yet` : done ? 'We found your window' : `Looking for your window in ${city}`}
+          {done && !first ? 'No one free yet' : done ? `We found your window in ${foundCity}` : `Looking for your window in ${city}`}
         </T>
         <T variant="muted" style={{ color: colors.nightSoft, textAlign: 'center' }}>
           {done && !first
-            ? 'We\'ll keep looking and let you know as soon as someone joins.'
+            ? `Everyone in ${city} already has a pen pal. We'll let you know as soon as someone is free.`
             : `Someone who ${likes.length ? `loves ${likes.join(' and ')}, ` : ''}and dreams of ${home}.`}
         </T>
       </View>

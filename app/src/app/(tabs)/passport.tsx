@@ -1,12 +1,12 @@
 // Passport: stamps you collect, and a "When I visit" plan built from places your partner showed you.
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, Share, Text, View } from 'react-native';
+import { ActivityIndicator, Share, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { Stamp } from '@/components/Stamp';
 import { TAB_BAR_SPACE } from '@/components/TabBar';
-import { Button, Chip, T } from '@/components/ui';
+import { Button, T } from '@/components/ui';
 import { getItinerary, getMatches, getWall } from '@/lib/data';
 import { dayNumber } from '@/lib/time';
 import { colors, fonts, radius } from '@/lib/theme';
@@ -27,9 +27,10 @@ export default function Passport() {
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        const ms = (await getMatches()).filter((m) => m.status !== 'ended');
+        // One pen pal at a time
+        const ms = (await getMatches()).filter((m) => m.status !== 'ended').slice(0, 1);
         setMatches(ms);
-        setSelected((s) => s ?? ms[0]?.id ?? null);
+        setSelected(ms[0]?.id ?? null);
         // Stamps are worked out from your windows: one per city with windows, plus milestones
         const walls = await Promise.all(ms.map((m) => getWall(m.id).catch(() => [])));
         const earned: StampInfo[] = [];
@@ -84,14 +85,6 @@ export default function Passport() {
           <Text style={{ fontFamily: fonts.body, fontSize: 14, color: colors.nightSoft }}>Your first stamp arrives with your first window.</Text>
         )}
       </View>
-
-      {matches.length > 1 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {matches.map((m) => (
-            <Chip key={m.id} small label={m.city} selected={m.id === selected} onPress={() => setSelected(m.id)} />
-          ))}
-        </ScrollView>
-      ) : null}
 
       {match ? (
         <>

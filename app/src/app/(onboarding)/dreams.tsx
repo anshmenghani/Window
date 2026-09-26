@@ -1,4 +1,4 @@
-// Dream places: pick up to 3 cities. Each dream city becomes its own window (one partner per city).
+// Dream places: pick up to 3 cities. You get ONE pen pal, the best fit who lives in any of them.
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
@@ -47,7 +47,7 @@ export default function Dreams() {
       <StepHeader step={3} onBack={() => router.back()} />
       <View style={{ gap: 8 }}>
         <T variant="title">Where do you dream of going?</T>
-        <T variant="muted">Pick up to 3. We&apos;ll find someone who lives there.</T>
+        <T variant="muted">Pick up to 3. We&apos;ll match you with one person who lives in one of them.</T>
       </View>
 
       {/* little globe with flight paths from home to each dream */}
@@ -150,7 +150,7 @@ export default function Dreams() {
       </Pressable>
 
       <Spacer />
-      <Button title="Find my windows" onPress={next} loading={busy} disabled={!dreams.length} />
+      <Button title="Find my window" onPress={next} loading={busy} disabled={!dreams.length} />
     </Screen>
   );
 }

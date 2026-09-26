@@ -10,6 +10,13 @@ HackGT 13 · hacking ends **Sun Sep 27, 8:00 AM** · 4-person team
 > **Never commit keys.** `.env` files are gitignored. Commit messages are plain descriptions, with no AI co-author trailers.
 
 ## Changelog (newest first)
+- **Sat 4:05 AM · Sid: ONE PEN PAL AT A TIME.** People still pick up to 3 dream cities, but each person has **at most one** match that isn't `ended`, on both sides.
+  - **`POST /match` (section 8):** if the caller already has an `active`/`paused` match, return just that one as `[{city, status:'matched', match}]`. Otherwise pool candidates from **all** dream cities, **exclude any candidate who already has an `active`/`paused` match**, score them the same way, and create **one** match with the best candidate. If there's nobody free, return `[{city, status:'waiting'}, …]` for each dream city.
+  - **`getMatches()` (section 7):** returns at most one match (the newest non-ended one). Screens use `matches[0]`.
+  - **Ending:** the You tab has "End this window and find someone new", which calls `setMatchStatus(id, 'ended')` and then opens Matching (`findMatches()`). Report/block already ends the match.
+  - **Optional DB safety net:** a trigger rejecting a new `active` match if either user already has an `active`/`paused` one. Server-side checking is enough for the hackathon.
+  - **Hardware (section 10):** don't hardcode `PARTNER_ID` anymore. Every ~30 s, find the single match where `status in ('active','paused')` and `me in (user_a, user_b)`; the partner is the other user. If there's none, the window idles (soft glow, knocks disabled). A **paused** match should not send or play knocks.
+- **Sat 3:40 AM · Sid:** Sign-up/login now uses a **username** instead of an email. The app turns it into a hidden email `username@users.windowapp.dev` (see `usernameToEmail` in `app/src/lib/config.ts`) before calling `signUp`/`signIn`, so the contract and `real.ts` are unchanged. Affects: section 10 (Pi `WINDOW_EMAIL` = `<username>@users.windowapp.dev`) and section 11 (create personas as `aiko@users.windowapp.dev` etc.). Keep "Confirm email" OFF. **Please test one real sign-up**: if Supabase rejects the domain as invalid, tell Sid and we change that one constant.
 - **Sat 2:45 AM · Sid:** Expo SDK 57's template puts code in `app/src/`. Screens live in `app/src/app/`, components in `app/src/components/`, and shared code in **`app/src/lib/`** (so `types.ts`, `data.ts`, `real.ts`, `supabase.ts`, `api.ts` and `notifications.ts` are all in `app/src/lib/`). Every path in this spec now uses these.
 
 ---
@@ -109,7 +116,7 @@ ELEVENLABS_VOICE_ID=         # stretch; one warm multilingual stock voice
 HOOK_SECRET=                 # random string; Supabase webhooks send it in x-hook-secret
 ```
 
-`hardware/.env` (per Pi): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `WINDOW_EMAIL`, `WINDOW_PASSWORD`, `PARTNER_ID`
+`hardware/.env` (per Pi): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `WINDOW_EMAIL`, `WINDOW_PASSWORD` (partner comes from the one active match, see changelog)
 
 ---
 

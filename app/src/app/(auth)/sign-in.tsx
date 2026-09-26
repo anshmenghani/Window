@@ -1,33 +1,50 @@
-// Email + password sign up / log in (Supabase Auth in the real backend).
+// Username + password sign up / log in.
+// Supabase Auth needs an email, so the username is turned into a hidden one
+// (see usernameToEmail in lib/config.ts). Nobody ever sees or receives it.
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Screen, Spacer } from '@/components/Screen';
 import { BackButton, Button, ErrorText, Field, T } from '@/components/ui';
 import { signIn, signUp } from '@/lib/data';
+import { usernameToEmail } from '@/lib/config';
 import { useSession } from '@/lib/session';
 import { colors, fonts } from '@/lib/theme';
+
+const USERNAME = /^[a-z0-9_.]{3,20}$/;
+
+// Backend errors talk about emails; people here only know their username.
+function friendly(message: string) {
+  if (/already registered|already exists/i.test(message)) return 'That username is taken. Try another one.';
+  if (/do not match|invalid login|invalid credentials/i.test(message)) return 'That username and password don\'t match.';
+  return message.replace(/email/gi, 'username');
+}
 
 export default function SignIn() {
   const params = useLocalSearchParams<{ mode?: string }>();
   const [mode, setMode] = useState<'signup' | 'login'>(params.mode === 'login' ? 'login' : 'signup');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { refresh } = useSession();
   const isSignup = mode === 'signup';
+  const name = username.trim().toLowerCase();
 
   const submit = async () => {
     setError(null);
+    if (!USERNAME.test(name)) {
+      setError('Usernames are 3–20 characters: letters, numbers, _ or .');
+      return;
+    }
     setBusy(true);
     try {
-      if (isSignup) await signUp(email.trim(), password);
-      else await signIn(email.trim(), password);
+      if (isSignup) await signUp(usernameToEmail(name), password);
+      else await signIn(usernameToEmail(name), password);
       const p = await refresh();
       router.replace(p?.onboarded ? '/today' : '/about');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
+      setError(friendly(e instanceof Error ? e.message : 'Something went wrong. Try again.'));
     } finally {
       setBusy(false);
     }
@@ -39,18 +56,19 @@ export default function SignIn() {
       <View style={{ gap: 8 }}>
         <T variant="title">{isSignup ? 'Make your window' : 'Welcome back'}</T>
         <T variant="muted">
-          {isSignup ? 'Just an email and a password. Nobody else ever sees them.' : 'Log in to see today\'s windows.'}
+          {isSignup ? 'Pick a username and a password. Your partner only ever sees your first name.' : 'Log in to see today\'s windows.'}
         </T>
       </View>
       <Field
-        label="Email"
-        value={email}
-        onChangeText={setEmail}
+        label="Username"
+        value={username}
+        onChangeText={setUsername}
         autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
-        placeholder="you@example.com"
+        autoCorrect={false}
+        autoComplete="username"
+        placeholder="like sid_dutta"
         returnKeyType="next"
+        maxLength={20}
       />
       <Field
         label="Password"
@@ -69,7 +87,7 @@ export default function SignIn() {
           title={isSignup ? 'Create account' : 'Log in'}
           onPress={submit}
           loading={busy}
-          disabled={!email || password.length < (isSignup ? 6 : 1)}
+          disabled={name.length < 3 || password.length < (isSignup ? 6 : 1)}
         />
         <Pressable onPress={() => setMode(isSignup ? 'login' : 'signup')} style={{ padding: 10, alignItems: 'center' }}>
           <T style={{ fontFamily: fonts.semibold, fontSize: 15, color: colors.duskDeep }}>

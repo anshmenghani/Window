@@ -46,18 +46,14 @@ const minjun: Profile = {
   mutual_dreams: true, hide_contact: true, onboarded: true,
 };
 
+// Locals who could become your pen pal
+const personas: Profile[] = [aiko, ines, minjun];
+
+// You start with Aiko as your one pen pal (demo). End the window on the You tab to get matched again.
 const matches: Match[] = [
   {
     id: 'm-aiko', city: 'Kyoto', status: 'active', created_at: daysAgo(5), partner: aiko,
     reason: 'You both shoot on film, love ramen, and Aiko has always wanted to see Atlanta.',
-  },
-  {
-    id: 'm-ines', city: 'Lisbon', status: 'active', created_at: daysAgo(2), partner: ines,
-    reason: 'You both love coffee and old buildings, and Inês dreams of visiting Atlanta.',
-  },
-  {
-    id: 'm-minjun', city: 'Seoul', status: 'active', created_at: daysAgo(1), partner: minjun,
-    reason: 'You both shoot film and hunt for street food, and Minjun wants to see Atlanta.',
   },
 ];
 
@@ -132,17 +128,30 @@ export async function saveProfile(p: Partial<Profile>): Promise<void> {
 }
 export async function registerPushToken(): Promise<void> {}
 
-// ---------- matching ----------
+// ---------- matching (ONE pen pal at a time) ----------
 export async function findMatches(): Promise<MatchResult[]> {
   await wait(3500); // long enough to see the Matching animation
-  return me.dream_places.map((city) => {
-    const match = matches.find((m) => m.city === city);
-    return match ? { city, status: 'matched' as const, match } : { city, status: 'waiting' as const };
-  });
+  // Already have a pen pal? Return them.
+  const current = matches.find((m) => m.status !== 'ended');
+  if (current) return [{ city: current.city, status: 'matched', match: { ...current } }];
+  // Otherwise pick the best free local across all dream cities (here: the first persona in one of them)
+  for (const city of me.dream_places) {
+    const local = personas.find((p) => p.home_city === city && !matches.some((m) => m.partner.id === p.id));
+    if (local) {
+      const match: Match = {
+        id: `m-${local.id}`, city, status: 'active', created_at: new Date().toISOString(), partner: local,
+        reason: `You both love ${local.interests[0].toLowerCase()}, and ${local.name} has always wanted to see ${me.home_city || 'your city'}.`,
+      };
+      matches.push(match);
+      return [{ city, status: 'matched', match: { ...match } }];
+    }
+  }
+  return me.dream_places.map((city) => ({ city, status: 'waiting' as const }));
 }
 export async function getMatches(): Promise<Match[]> {
   await wait(150);
-  return matches.filter((m) => m.status !== 'ended').map((m) => ({ ...m }));
+  // At most one non-ended match
+  return matches.filter((m) => m.status !== 'ended').slice(0, 1).map((m) => ({ ...m }));
 }
 export async function setMatchStatus(matchId: string, status: Match['status']): Promise<void> {
   const m = matches.find((x) => x.id === matchId);

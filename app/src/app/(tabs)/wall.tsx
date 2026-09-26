@@ -1,12 +1,12 @@
 // Wall: watch a city fill up with someone's life. A map of every window they've sent.
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { TAB_BAR_SPACE } from '@/components/TabBar';
-import { Chip, T } from '@/components/ui';
+import { T } from '@/components/ui';
 import { getMatches, getWall } from '@/lib/data';
 import { stampLine } from '@/lib/time';
 import { colors, fonts, radius, shadow } from '@/lib/theme';
@@ -27,9 +27,10 @@ export default function Wall() {
   useFocusEffect(
     useCallback(() => {
       getMatches().then((ms) => {
-        const active = ms.filter((m) => m.status !== 'ended');
-        setMatches(active);
-        setSelected((s) => s ?? active[0]?.id ?? null);
+        // One pen pal at a time
+        const current = ms.filter((m) => m.status !== 'ended').slice(0, 1);
+        setMatches(current);
+        setSelected(current[0]?.id ?? null);
       });
     }, []),
   );
@@ -49,14 +50,6 @@ export default function Wall() {
         </T>
         <T variant="display">{p ? `${p.name}'s ${p.home_city}` : 'Wall'}</T>
       </View>
-
-      {matches.length > 1 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {matches.map((m) => (
-            <Chip key={m.id} small label={m.city} selected={m.id === selected} onPress={() => setSelected(m.id)} />
-          ))}
-        </ScrollView>
-      ) : null}
 
       {p ? (
         <View style={{ height: 360, borderRadius: radius.xl, overflow: 'hidden', backgroundColor: '#E4E9DE' }}>

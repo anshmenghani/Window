@@ -17,7 +17,7 @@ import { getMatches, getToday } from '@/lib/data';
 import { useInbox } from '@/lib/inbox';
 import { useSession } from '@/lib/session';
 import { openedWindows } from '@/lib/seen';
-import { dayNumber, hourIn, longDate, timeAgo } from '@/lib/time';
+import { dayNumber, longDate, timeAgo } from '@/lib/time';
 import { colors, fonts, radius } from '@/lib/theme';
 import type { Match, WindowItem } from '@/lib/types';
 
@@ -31,7 +31,8 @@ export default function Today() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const ms = (await getMatches()).filter((m) => m.status === 'active');
+    // One pen pal at a time: the (single) current match, active or paused
+    const ms = (await getMatches()).filter((m) => m.status !== 'ended').slice(0, 1);
     setMatches(ms);
     const entries = await Promise.all(ms.map(async (m) => [m.id, await getToday(m.id)] as const));
     setToday(Object.fromEntries(entries));
@@ -54,7 +55,6 @@ export default function Today() {
 
   const tz = profile?.tz ?? 'America/New_York';
   const main = matches?.[0];
-  const others = matches?.slice(1) ?? [];
   const t = main ? today[main.id] : undefined;
 
   return (
@@ -82,9 +82,15 @@ export default function Today() {
 
       {matches && !main ? (
         <View style={{ gap: 14, paddingVertical: 30, alignItems: 'center' }}>
-          <T variant="heading" style={{ textAlign: 'center' }}>Your windows are on their way</T>
+          <T variant="heading" style={{ textAlign: 'center' }}>Your window is on its way</T>
           <T variant="muted" style={{ textAlign: 'center' }}>We&apos;re still looking for someone in your dream cities.</T>
           <Button title="Look again" onPress={() => router.push('/matching')} style={{ alignSelf: 'stretch' }} />
+        </View>
+      ) : null}
+
+      {main?.status === 'paused' ? (
+        <View style={{ padding: 14, borderRadius: radius.md, backgroundColor: colors.honey }}>
+          <T style={{ fontFamily: fonts.semibold, color: colors.honeyText }}>Your window with {main.partner.name} is paused. Resume it from the You tab.</T>
         </View>
       ) : null}
 
@@ -99,14 +105,6 @@ export default function Today() {
         </>
       ) : null}
 
-      {others.length ? (
-        <View style={{ gap: 10 }}>
-          <T variant="label" style={{ color: colors.muted }}>Your other windows</T>
-          {others.map((m, i) => (
-            <OtherRow key={m.id} match={m} state={today[m.id]} color={['#F4D27A', '#3F477F', '#D9573F'][i % 3]} />
-          ))}
-        </View>
-      ) : null}
     </Screen>
   );
 }
@@ -188,39 +186,6 @@ function YourWindow({ match, mine, sent }: { match: Match; mine?: WindowItem; se
       )}
       <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.ink }}>Your window</Text>
       <T variant="small" style={{ marginTop: -6 }}>{sent ? 'Sent today ✓' : 'Not sent yet · tap to open'}</T>
-    </Pressable>
-  );
-}
-
-function OtherRow({ match, state, color }: { match: Match; state?: TodayState; color: string }) {
-  const p = match.partner;
-  const asleep = hourIn(p.tz) >= 23 || hourIn(p.tz) < 7;
-  const status = state?.theirs && state.sentToday
-    ? 'You both sent today'
-    : state?.theirs
-      ? 'New window · tap to open'
-      : asleep
-        ? `Asleep · it's ${hourIn(p.tz) < 7 ? 'early morning' : 'late'} in ${p.home_city}`
-        : 'Their window hasn\'t arrived yet';
-  return (
-    <Pressable
-      onPress={() =>
-        state?.theirs
-          ? router.push({ pathname: '/window/[id]', params: { id: state.theirs.id } })
-          : router.push({ pathname: '/capture', params: { match: match.id } })
-      }
-      style={({ pressed }) => [
-        { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: colors.white },
-        pressed && { opacity: 0.8 },
-      ]}
-    >
-      <View style={{ width: 44, height: 52, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, backgroundColor: color, overflow: 'hidden' }}>
-        {state?.theirs ? <Image source={{ uri: state.theirs.photo_url }} style={{ flex: 1 }} contentFit="cover" /> : null}
-      </View>
-      <View style={{ flex: 1 }}>
-        <T style={{ fontFamily: fonts.semibold }}>{p.name} · {p.home_city}</T>
-        <T variant="small">{status}</T>
-      </View>
     </Pressable>
   );
 }
