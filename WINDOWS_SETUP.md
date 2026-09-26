@@ -5,13 +5,13 @@ The two Raspberry Pi windows (Ansh's `window_sync_supabase_project`) and the Win
 inside the database. The Pi code and the app code don't need any changes.
 
 ```text
- Sid's phone ──┐                                   ┌── Aiko's phone
+ Sid's phone ──┐                                   ┌── Isha's phone
    knocks      │        SUPABASE (the app's)       │     knocks
                ▼                                   ▼
         knocks table  ◄──── window_bridge.sql ────► window_knocks table
                ▲         (converts the rhythm,      ▲
                │          checks they're pen pals)  │
- Sid's window (Pi, side A) ─────────────────────── Aiko's window (Pi, side B)
+ Sid's window (Pi, side A) ─────────────────────── Isha's window (Pi, side B)
    accelerometer · buzzer · RGB light showing the partner's time of day
 ```
 
@@ -19,9 +19,9 @@ What happens once it's set up:
 
 | You do this | This happens |
 |---|---|
-| Knock on Sid's wooden window | Aiko's window buzzes the same rhythm **and** Aiko's phone shows "Sid knocked · on the window in Atlanta" (the crane on her sill hops and Sid's window on her sill rattles) |
-| Knock back on Aiko's wooden window | Sid's window buzzes it, and Sid's phone shows the banner |
-| Aiko changes her city in the app | Sid's window light follows her new time zone |
+| Knock on Sid's wooden window | Isha's window buzzes the same rhythm **and** Isha's phone shows "Sid knocked · on the window in Atlanta" (the crane on her sill hops and Sid's window on her sill rattles) |
+| Knock back on Isha's wooden window | Sid's window buzzes it, and Sid's phone shows the banner |
+| Isha changes her city in the app | Sid's window light follows her new time zone |
 | Pause the pen pals in the You tab | The windows stop knocking each other (and the app), until you resume |
 
 ## Setup (about 15 minutes)
@@ -54,7 +54,7 @@ the two Pis' `config.json` (which is git-ignored), not in chat or GitHub.
 ### 4. Link the pair to the two app accounts (once)
 Both people must have signed up in the app first. In the SQL Editor:
 ```sql
-select public.window_link('AB12CD34', 'sid', 'aiko');
+select public.window_link('AB12CD34', 'sid', 'isha');
 ```
 Side **A** becomes the first username's window, side **B** the second's. It returns both time zones and
 `"pen_pals_active": true` if they're currently pen pals. Re-run it any time to re-link.
@@ -70,7 +70,7 @@ In `pi/config.json` on each Pi:
   "side": "A"
 }
 ```
-Sid's window uses `"side": "A"`, Aiko's uses `"side": "B"`. Then start it (see Ansh's README):
+Sid's window uses `"side": "A"`, Isha's uses `"side": "B"`. Then start it (see Ansh's README):
 ```bash
 python daemon.py --config config.json
 ```
@@ -82,14 +82,14 @@ In the app: **You tab → Your window.** It shows whether your window and your p
 which time zone your light is showing, and a **Knock on my window** button that makes *your own*
 window knock three times (it doesn't reach your pen pal). Then:
 
-1. Knock on window A → window B buzzes, and Aiko's phone shows the knock banner.
+1. Knock on window A → window B buzzes, and Isha's phone shows the knock banner.
 2. Knock on window B → window A buzzes, and Sid's phone shows the banner.
-3. Look at the Pi logs: `[light] partner timezone=Asia/Tokyo` on A, `America/New_York` on B.
+3. Look at the Pi logs: `[light] partner timezone=America/Cancun` on A, `America/New_York` on B.
 
 ## Demo notes
 - **Put the Pis on a phone hotspot.** The hackathon Wi-Fi has a login page the Pis can't get through.
-- The windows are linked to **accounts**, not matches. If you run `demo_reset.sql` block 2 (ending Aiko's
-  match so a judge can be matched with her), Sid's and Aiko's windows stop knocking until Sid and Aiko
+- The windows are linked to **accounts**, not matches. If you run `demo_reset.sql` block 2 (ending Isha's
+  match so a judge can be matched with her), Sid's and Isha's windows stop knocking until Sid and Isha
   are pen pals again. Link the windows to the two demo accounts you keep matched.
 - A knock rhythm on the Pi can be up to 20 taps; the app shows the first 10.
 

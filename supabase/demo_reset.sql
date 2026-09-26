@@ -11,12 +11,12 @@ where sender_id = (select id from auth.users where email = 'sid' || '@users.wind
   and local_date >= current_date - 1;
 
 
--- 2) "Free up Aiko for the next judge"
+-- 2) "Free up Isha for the next judge"
 -- Everyone has at most one pen pal. This ends every current match for a user, so the
 -- next person who picks their city can be matched with them.
 update public.matches set status = 'ended'
 where status in ('active', 'paused')
-  and (select id from auth.users where email = 'aiko' || '@users.windowapp.dev') in (user_a, user_b);
+  and (select id from auth.users where email = 'isha' || '@users.windowapp.dev') in (user_a, user_b);
 
 
 -- 3) Check who is matched with whom right now

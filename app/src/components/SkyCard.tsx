@@ -1,4 +1,4 @@
-// "Aiko's sky right now": a narrow paper strip with a hand-drawn sun path across their day.
+// "Isha's sky right now": a narrow paper strip with a hand-drawn sun path across their day.
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';

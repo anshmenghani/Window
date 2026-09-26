@@ -66,7 +66,7 @@ export type MemoryStamp = {
   window_id?: string; created_at: string;
 };
 
-/** "Aiko's Kyoto, as you know it": a short portrait built only from what they've shown you. */
+/** "Isha's Cancún, as you know it": a short portrait built only from what they've shown you. */
 export type Portrait = { text: string; letters: number; updated_at: string };
 
 /** The physical window (Raspberry Pi) linked to your account, and your pen pal's. */

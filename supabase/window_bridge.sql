@@ -6,11 +6,11 @@
 --   2. window_sync_supabase_project/supabase/schema.sql   (the Pis: window_pairs, window_sides, window_knocks)
 --   3. this file
 -- Then link a pair of windows to two app users, once:
---   select public.window_link('AB12CD34', 'sid', 'aiko');   -- side A = sid's window, side B = aiko's
+--   select public.window_link('AB12CD34', 'sid', 'isha');   -- side A = sid's window, side B = isha's
 --
 -- What it does:
 --   * A knock on a Pi (window_knocks) is copied into the app's knocks table, so the partner's
---     phone shows "Aiko knocked" and the crane hops.
+--     phone shows "Isha knocked" and the crane hops.
 --   * A knock sent from the app (knocks, source 'app') is copied into window_knocks, so the
 --     partner's Pi buzzes the same rhythm.
 --   * Each window's LED follows the partner's time zone straight from their app profile.
@@ -203,7 +203,7 @@ for each row execute function public.window_follow_profile_tz();
 
 -- ---------------------------------------------------------------------------
 -- Link a physical pair to two app users by username (run in the SQL Editor).
---   select public.window_link('AB12CD34', 'sid', 'aiko');
+--   select public.window_link('AB12CD34', 'sid', 'isha');
 -- Side A becomes the first user's window, side B the second's. Re-running re-links.
 -- ---------------------------------------------------------------------------
 create or replace function public.window_link(p_pair_id text, p_username_a text, p_username_b text)
