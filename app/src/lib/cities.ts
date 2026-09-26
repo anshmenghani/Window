@@ -226,11 +226,13 @@ export function findCity(name: string | undefined): City | undefined {
 }
 
 export function searchCities(query: string, exclude: string[] = []): City[] {
-  const q = plain(query.trim());
-  if (!q) return [];
+  // every word typed must appear in the city or its country, so "Cancún, Mex" and "cancun mexico" both work
+  const words = plain(query).replace(/[,.()]/g, ' ').split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const first = words[0];
   // cities whose name starts with what you typed come first ("san" → San Diego before Busan)
-  return CITIES.filter((c) => !exclude.includes(c.name) && (plain(c.name).includes(q) || plain(c.country).includes(q)))
-    .sort((a, b) => Number(!plain(a.name).startsWith(q)) - Number(!plain(b.name).startsWith(q)))
+  return CITIES.filter((c) => !exclude.includes(c.name) && words.every((w) => plain(`${c.name} ${c.country}`).includes(w)))
+    .sort((a, b) => Number(!plain(a.name).startsWith(first)) - Number(!plain(b.name).startsWith(first)))
     .slice(0, 5);
 }
 
