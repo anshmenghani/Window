@@ -27,7 +27,8 @@ def require_user(credentials: HTTPAuthorizationCredentials | None = Depends(bear
         if not user:
             raise ValueError("missing user")
         return user.id
-    except Exception:
+    except Exception as error:
+        print(f"[auth] token check failed: {type(error).__name__}: {str(error)[:200]}", flush=True)
         raise HTTPException(status_code=401, detail="Your session has expired. Please sign in again.")
 
 
@@ -51,8 +52,17 @@ def profile(user_id: str) -> dict[str, Any]:
 
 
 @app.get("/health")
-def health() -> dict[str, Any]:
-    return {"ok": True, "ai": ai.provider()}
+def health(db: bool = False) -> dict[str, Any]:
+    result: dict[str, Any] = {"ok": True, "ai": ai.provider()}
+    if db:
+        # /health?db=1 checks the server can reach Supabase with its own keys (no data returned)
+        try:
+            get_supabase().table("profiles").select("id").limit(1).execute()
+            get_supabase().auth.admin.list_users(page=1, per_page=1)
+            result["db"] = "ok"
+        except Exception as error:
+            result["db"] = f"{type(error).__name__}: {str(error)[:160]}"
+    return result
 
 
 @app.post("/match")
