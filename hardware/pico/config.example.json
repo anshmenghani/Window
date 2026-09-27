@@ -6,8 +6,17 @@
   "pair_id": "REPLACE_ME",
   "pair_secret": "REPLACE_ME",
   "side": "A",
-  "sensor": {"sda": 6, "scl": 7, "frequency": 50000},
-  "detection": {"threshold_g": 0.25, "cooldown_ms": 300, "sequence_gap_ms": 900, "max_knocks": 12},
+  "sensor": {"sda": 18, "scl": 19, "frequency": 50000},
+  "detection": {"threshold_g": 0.25, "cooldown_ms": 250, "sequence_gap_ms": 1500, "max_knocks": 12, "peak_window_ms": 60},
+  "rgb_led": {
+    "enabled": true,
+    "red_pin": 11,
+    "green_pin": 12,
+    "blue_pin": 13,
+    "common": "anode",
+    "brightness": 0.55
+  },
+  "poll_ms": 1000,
   "retry_ms": 3000,
   "queue_ttl_ms": 60000
 }

@@ -4,14 +4,14 @@ from time import sleep_ms
 
 class Sensor:
     def __init__(self, config):
-        self.i2c = SoftI2C(sda=Pin(config.get("sda", 6)),
-                          scl=Pin(config.get("scl", 7)),
+        self.i2c = SoftI2C(sda=Pin(config.get("sda", 18)),
+                          scl=Pin(config.get("scl", 19)),
                           freq=config.get("frequency", 50000))
         sleep_ms(200)
         devices = self.i2c.scan()
         self.address = next((a for a in (0x1C, 0x1D) if a in devices), None)
         if self.address is None:
-            raise RuntimeError("MMA845x missing; check GP6 SDA, GP7 SCL, 3V3 and GND")
+            raise RuntimeError("MMA845x missing; check configured SDA/SCL pins (default GP18/GP19), 3V3 OUT and GND")
         chip_id = self.read_register(0x0D)[0]
         settings = {0x1A: (2, 4096), 0x2A: (4, 1024), 0x3A: (6, 256)}
         if chip_id not in settings:

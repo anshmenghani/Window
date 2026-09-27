@@ -3,153 +3,384 @@ from time import sleep, sleep_ms, ticks_ms, ticks_diff
 from math import sqrt
 
 THRESHOLD = 0.25
-COOLDOWN = 200  # Minimum milliseconds between detected taps.
-SEQUENCE_GAP_MS = 1500  # Silence after the final tap before playback.
+COOLDOWN = 250
+SEQUENCE_GAP_MS = 1500
 MAX_KNOCKS = 12
 
 SERVO_PIN = 28
-# Conservative starting positions; adjust to your horn/wood placement.
-# Swap direction by making STRIKE_US smaller than REST_US if needed.
-SERVO_REST_US = 1500
-SERVO_STRIKE_US = 1750  # Gentle knock endpoint.
-SERVO_HARD_STRIKE_US = 1950  # Strong knock endpoint; tune to avoid pushing into wood.
-HARD_KNOCK_G = 1.5  # Measured acceleration change that gives maximum swing.
-PEAK_WINDOW_MS = 60  # Capture the impact peak after crossing the threshold.
-STRIKE_HOLD_MS = 80
+SERVO_REST_US = 1700
+SERVO_STRIKE_US = 1150
+SERVO_HARD_STRIKE_US = 1000
+
+HARD_KNOCK_G = 1.5
+PEAK_WINDOW_MS = 60
+STRIKE_HOLD_MS = 120
 RETRACT_MS = 120
 SETTLE_MS = 500
 
+LOCAL_START_HOUR = 12.0  # Set to local time when starting, e.g. 18.5 = 6:30 PM.
+LIGHT_TIME_SPEED = 1.0  # Use 3600.0 to preview one hour of color per second.
+RGB_BRIGHTNESS = 0.55
+
+
+from rp2 import PIO, StateMachine, asm_pio
+
+
+@asm_pio(sideset_init=PIO.OUT_LOW)
+def _led_pwm():
+    pull(noblock).side(0)
+    mov(x, osr)
+    mov(y, isr)
+    label("count")
+    jmp(x_not_y, "next")
+    nop().side(1)
+    label("next")
+    jmp(y_dec, "count")
+
+
+class PIOPWM:
+    def __init__(self, state_machine, pin, duty_u16):
+        self.sm = StateMachine(state_machine, _led_pwm, freq=2000000,
+                               sideset_base=Pin(pin))
+        self.active = False
+        self.last_duty = None
+        self.sm.put(255)
+        self.sm.exec("pull()")
+        self.sm.exec("mov(isr, osr)")
+        self.duty_u16(duty_u16)
+
+    def duty_u16(self, value):
+        value = max(0, min(65535, int(value)))
+        if value == self.last_duty:
+            return
+        self.last_duty = value
+        if value in (0, 65535):
+            self.sm.active(0)
+            self.active = False
+            self.sm.exec("nop().side(%d)" % (1 if value else 0))
+        else:
+            # The counter value 0 produces a narrow pulse; 255 is almost full on.
+            self.sm.put(max(0, min(255, round(value * 256 / 65535) - 1)))
+            if not self.active:
+                self.sm.active(1)
+                self.active = True
+
+    def deinit(self):
+        self.sm.active(0)
+        self.active = False
+
+
+ANCHORS = (
+    (0.0, (0.03, 0.00, 0.10)),
+    (5.0, (0.08, 0.01, 0.16)),
+    (7.0, (1.00, 0.20, 0.03)),
+    (9.0, (0.35, 0.55, 1.00)),
+    (15.0, (0.18, 0.48, 1.00)),
+    (18.5, (1.00, 0.28, 0.02)),
+    (21.0, (0.30, 0.03, 0.35)),
+    (24.0, (0.03, 0.00, 0.10)),
+)
+
+
+def color_for_hour(hour):
+    hour %= 24
+    for (start, first), (end, last) in zip(ANCHORS, ANCHORS[1:]):
+        if start <= hour <= end:
+            blend = (hour - start) / (end - start)
+            return tuple(a + (b - a) * blend for a, b in zip(first, last))
+
+
+class TimeLight:
+    def __init__(self, config, sensor_config, ticks_diff):
+        self.channels = []
+        self.diff = ticks_diff
+        self.snapshot = None
+        self.hour = None
+        self.last_tick = None
+        self.last_render = None
+        self.enabled = bool(config.get("enabled", False))
+        self.anode = config.get("common", "cathode") == "anode"
+        self.brightness = float(config.get("brightness", 0.55))
+        if not self.enabled:
+            return
+        if config.get("common", "cathode") not in ("cathode", "anode"):
+            raise ValueError("rgb_led.common must be cathode or anode")
+        if not 0 <= self.brightness <= 1:
+            raise ValueError("rgb_led.brightness must be 0..1")
+        pins = [config.get(name + "_pin") for name in ("red", "green", "blue")]
+        exposed = list(range(23)) + [26, 27, 28]
+        reserved = [sensor_config.get("sda", 18), sensor_config.get("scl", 19), 28]
+        if any(type(p) is not int or p not in exposed or p in reserved for p in pins):
+            raise ValueError("Set RGB GPIOs; avoid sensor pins and servo pin GP28")
+        if len(set(pins)) != 3:
+            raise ValueError("RGB pins must be distinct")
+        try:
+            for state_machine, pin in enumerate(pins):
+                self.channels.append(PIOPWM(state_machine, pin,
+                                            duty_u16=65535 if self.anode else 0))
+        except Exception:
+            self.close()
+            raise
+
+    def update(self, now, snapshot):
+        if not self.enabled:
+            return
+        if snapshot is not None and snapshot != self.snapshot:
+            hour, received_at = snapshot
+            if not isinstance(hour, (int, float)) or not 0 <= hour < 24:
+                raise ValueError("Invalid partner local_hour from Supabase")
+            self.hour = (hour + max(0, self.diff(now, received_at)) / 3600000) % 24
+            self.snapshot = snapshot
+            self.last_tick = now
+            self.last_render = None
+        elif self.hour is not None:
+            # Advance incrementally so the wrapping tick counter remains safe.
+            self.hour = (self.hour + max(0, self.diff(now, self.last_tick)) / 3600000) % 24
+            self.last_tick = now
+        if self.hour is None:
+            return
+        if self.last_render is not None and self.diff(now, self.last_render) < 1000:
+            return
+        for channel, value in zip(self.channels, color_for_hour(self.hour)):
+            duty = int(value * self.brightness * 65535)
+            channel.duty_u16(65535 - duty if self.anode else duty)
+        self.last_render = now
+
+    def close(self):
+        for channel in self.channels:
+            channel.duty_u16(65535 if self.anode else 0)
+            channel.deinit()
+        self.channels = []
+
+
+class LocalLight:
+    def __init__(self):
+        if not 0 <= LOCAL_START_HOUR < 24 or LIGHT_TIME_SPEED <= 0:
+            raise ValueError("Set LOCAL_START_HOUR to 0..24 and LIGHT_TIME_SPEED above zero")
+        self.hour = LOCAL_START_HOUR
+        self.last_tick = ticks_ms()
+        self.last_render = None
+        defaults = hardware_config()
+        self.light = TimeLight(defaults["rgb_led"], defaults["sensor"], ticks_diff)
+        self.update()
+        print("Local light starts at hour:", LOCAL_START_HOUR)
+
+    def update(self):
+        now = ticks_ms()
+        self.hour = (self.hour + ticks_diff(now, self.last_tick)
+                     * LIGHT_TIME_SPEED / 3600000) % 24
+        self.last_tick = now
+        if self.last_render is not None and ticks_diff(now, self.last_render) < 100:
+            return
+        self.light.update(now, (self.hour, now))
+        self.last_render = now
+
+    def close(self):
+        self.light.close()
+
+
+def wait_ms(duration, light=None):
+    if light is None:
+        sleep_ms(duration)
+        return
+    start = ticks_ms()
+    while True:
+        light.update()
+        remaining = duration - ticks_diff(ticks_ms(), start)
+        if remaining <= 0:
+            return
+        sleep_ms(min(10, remaining))
+
 
 def set_servo(servo, pulse_us):
-    # Stay inside a conservative 1–2 ms pulse range at 50 Hz.
-    servo.duty_ns(max(1000, min(2000, int(pulse_us))) * 1000)
+    pulse_us = max(1000, min(2000, int(pulse_us)))
+    servo.duty_ns(pulse_us * 1000)
 
 
 def strike_for_impact(impact_g):
-    """Acceleration is a strength estimate, not a force/torque measurement."""
-    strength = max(0.0, min(1.0, (impact_g - THRESHOLD) / (HARD_KNOCK_G - THRESHOLD)))
-    return int(SERVO_STRIKE_US + strength * (SERVO_HARD_STRIKE_US - SERVO_STRIKE_US))
+    strength = (impact_g - THRESHOLD) / (HARD_KNOCK_G - THRESHOLD)
+    strength = max(0.0, min(1.0, strength))
+
+    return int(
+        SERVO_STRIKE_US
+        + strength * (SERVO_HARD_STRIKE_US - SERVO_STRIKE_US)
+    )
 
 
-def play_knocks(servo, offsets, impacts=None):
-    """Replay tap-onset offsets without adding servo travel time to every gap."""
-    gaps = [offsets[i] - offsets[i - 1] for i in range(1, len(offsets))]
-    print("Playing back", len(offsets), "knocks; gaps (ms):", gaps)
+def play_knocks(servo, offsets, impacts=None, light=None):
+    gaps = [
+        offsets[i] - offsets[i - 1]
+        for i in range(1, len(offsets))
+    ]
+
+    print("Playing back", len(offsets), "knocks")
+    print("Gaps (ms):", gaps)
+
     if impacts is not None:
-        print("Impact peaks (g):", [round(value, 2) for value in impacts])
+        print("Impact peaks (g):", [round(v, 2) for v in impacts])
+
     start = ticks_ms()
+
     try:
         for index, offset in enumerate(offsets):
             while ticks_diff(ticks_ms(), start) < offset:
-                sleep_ms(2)
-            pulse = SERVO_STRIKE_US if impacts is None else strike_for_impact(impacts[index])
+                wait_ms(2, light)
+
+            if impacts is None:
+                pulse = SERVO_STRIKE_US
+            else:
+                pulse = strike_for_impact(impacts[index])
+
             set_servo(servo, pulse)
-            sleep_ms(STRIKE_HOLD_MS)
+            wait_ms(STRIKE_HOLD_MS, light)
+
             set_servo(servo, SERVO_REST_US)
-            sleep_ms(RETRACT_MS)
+            wait_ms(RETRACT_MS, light)
+
     finally:
         set_servo(servo, SERVO_REST_US)
-    # No sensor reads during playback or this settling time: no self-triggering.
-    sleep_ms(SETTLE_MS)
+
+    wait_ms(SETTLE_MS, light)
 
 
-def detect_loop(read_acceleration, baseline, servo):
-    last_trigger = None
-    offsets = []
-    impacts = []
-    first_tap = None
+def hardware_config():
+    return {
+        "sensor": {"sda": 18, "scl": 19, "frequency": 50000},
+        "detection": {"threshold_g": THRESHOLD, "cooldown_ms": COOLDOWN,
+                      "sequence_gap_ms": SEQUENCE_GAP_MS, "max_knocks": MAX_KNOCKS,
+                      "peak_window_ms": PEAK_WINDOW_MS},
+        "rgb_led": {"enabled": True, "red_pin": 11, "green_pin": 12,
+                    "blue_pin": 13, "common": "anode", "brightness": RGB_BRIGHTNESS},
+    }
+
+
+class KnockRecorder:
+    def __init__(self, baseline, config=None):
+        settings = hardware_config()["detection"]
+        settings.update(config or {})
+        self.baseline = baseline
+        self.threshold = float(settings["threshold_g"])
+        self.cooldown = int(settings["cooldown_ms"])
+        self.gap = int(settings["sequence_gap_ms"])
+        self.maximum = int(settings["max_knocks"])
+        self.peak_window = int(settings["peak_window_ms"])
+        if not (0 < self.peak_window < self.cooldown < self.gap <= 10000
+                and 1 <= self.maximum <= 20 and self.threshold > 0):
+            raise ValueError("Invalid knock detection settings")
+        if self.cooldown < STRIKE_HOLD_MS + RETRACT_MS:
+            raise ValueError("Knock cooldown must allow the servo to strike and retract")
+        self.clear()
+
+    def clear(self):
+        self.offsets = []
+        self.impacts = []
+        self.first_tap = None
+        self.last_trigger = None
+
+    def finish(self, now):
+        if not self.offsets:
+            return None
+        silence = ticks_diff(now, self.last_trigger)
+        if (silence < self.gap
+                and not (len(self.offsets) >= self.maximum and silence >= self.peak_window)
+                and ticks_diff(now, self.first_tap) < 30000):
+            return None
+        offsets, impacts = self.offsets, self.impacts
+        intervals = [0] + [offsets[i] - offsets[i - 1] for i in range(1, len(offsets))]
+        self.clear()
+        return {"offsets": offsets, "intervals_ms": intervals, "impacts_g": impacts}
+
+    def sample(self, xyz, now):
+        change = sqrt(sum((xyz[i] - self.baseline[i]) ** 2 for i in range(3)))
+        if change >= self.threshold and (self.last_trigger is None
+                or ticks_diff(now, self.last_trigger) >= self.cooldown):
+            if self.first_tap is None:
+                self.first_tap = now
+            self.offsets.append(ticks_diff(now, self.first_tap))
+            self.impacts.append(change)
+            self.last_trigger = now
+            print("KNOCK DETECTED:", round(change, 2), "g; count:", len(self.offsets))
+            if len(self.offsets) > 1:
+                print("Time since previous knock:", self.offsets[-1] - self.offsets[-2], "ms")
+        elif self.impacts and ticks_diff(now, self.last_trigger) < self.peak_window:
+            self.impacts[-1] = max(self.impacts[-1], change)
+
+
+def detect_loop(read_acceleration, baseline, servo, light=None):
+    recorder = KnockRecorder(baseline)
     while True:
-        now = ticks_ms()
-        # Finish before reading a new sample so playback vibrations never enter
-        # the next sequence. A fresh timestamp is used after the blocking replay.
-        if offsets and (ticks_diff(now, last_trigger) >= SEQUENCE_GAP_MS
-                        or (len(offsets) >= MAX_KNOCKS
-                            and ticks_diff(now, last_trigger) >= PEAK_WINDOW_MS)):
-            play_knocks(servo, offsets, impacts)
-            offsets = []
-            impacts = []
-            first_tap = None
-            last_trigger = None
+        if light is not None:
+            light.update()
+        event = recorder.finish(ticks_ms())
+        if event:
+            play_knocks(servo, event["offsets"], event["impacts_g"], light)
+            recorder.clear()
             print("Ready")
             continue
-
         xyz = read_acceleration()
-        change = sqrt(sum((xyz[i] - baseline[i]) ** 2 for i in range(3)))
-        now = ticks_ms()
-        if change >= THRESHOLD and (last_trigger is None
-                                   or ticks_diff(now, last_trigger) >= COOLDOWN):
-            if first_tap is None:
-                first_tap = now
-            gap_ms = None if last_trigger is None else ticks_diff(now, last_trigger)
-            offsets.append(ticks_diff(now, first_tap))
-            impacts.append(change)
-            last_trigger = now
-            print("KNOCK DETECTED:", round(change, 2), "g; count:", len(offsets))
-            if gap_ms is not None:
-                print("Time since previous knock:", gap_ms, "ms")
-        elif impacts and ticks_diff(now, last_trigger) < PEAK_WINDOW_MS:
-            # A knock often peaks a few samples after its first threshold crossing.
-            impacts[-1] = max(impacts[-1], change)
+        recorder.sample(xyz, ticks_ms())
         sleep_ms(10)
 
 
 def run():
     if STRIKE_HOLD_MS + RETRACT_MS > COOLDOWN:
-        raise ValueError("Servo strike + retract time must not exceed knock cooldown")
-    if HARD_KNOCK_G <= THRESHOLD or not 0 < PEAK_WINDOW_MS < COOLDOWN:
-        raise ValueError("Hard-knock threshold must exceed detection threshold; peak window must fit cooldown")
+        raise ValueError(
+            "Servo strike + retract time must not exceed knock cooldown"
+        )
+
+    if HARD_KNOCK_G <= THRESHOLD:
+        raise ValueError(
+            "HARD_KNOCK_G must exceed THRESHOLD"
+        )
+
+    if not 0 < PEAK_WINDOW_MS < COOLDOWN:
+        raise ValueError(
+            "PEAK_WINDOW_MS must be between zero and COOLDOWN"
+        )
+
     servo = PWM(Pin(SERVO_PIN))
     servo.freq(50)
+    light = None
+
     try:
+        light = LocalLight()
         set_servo(servo, SERVO_REST_US)
-        sleep_ms(SETTLE_MS)
-        # GP6 = SDA, GP7 = SCL
+        wait_ms(SETTLE_MS, light)
+
         i2c = SoftI2C(
-            sda=Pin(6),
-            scl=Pin(7),
+            sda=Pin(18),
+            scl=Pin(19),
             freq=50000
         )
 
         sleep(0.2)
 
-        # -----------------------------
-        # Find sensor
-        # -----------------------------
-
         devices = i2c.scan()
-        print("Found devices:", devices)
+        print("Found devices:", [hex(d) for d in devices])
 
         if 0x1C in devices:
             address = 0x1C
         elif 0x1D in devices:
             address = 0x1D
         else:
-            raise Exception("MMA845x not found")
-
-        # -----------------------------
-        # Register functions
-        # -----------------------------
+            raise Exception(
+                "MMA845x not found. Check SDA GP18, SCL GP19, power and GND."
+            )
 
         def read_register(register, length=1):
             i2c.writeto(address, bytes([register]), False)
             return i2c.readfrom(address, length)
 
-
         def write_register(register, value):
             i2c.writeto(address, bytes([register, value]))
-
-
-        # -----------------------------
-        # Identify sensor
-        # -----------------------------
 
         chip_id = read_register(0x0D)[0]
         print("Chip ID:", hex(chip_id))
 
         settings = {
-            0x1A: (2, 4096),  # MMA8451
-            0x2A: (4, 1024),  # MMA8452
-            0x3A: (6, 256),   # MMA8453
+            0x1A: (2, 4096),
+            0x2A: (4, 1024),
+            0x3A: (6, 256),
         }
 
         if chip_id not in settings:
@@ -157,17 +388,9 @@ def run():
 
         shift, counts_per_g = settings[chip_id]
 
-        # -----------------------------
-        # Configure sensor
-        # -----------------------------
-
-        write_register(0x2A, 0x00)  # Standby
-        write_register(0x0E, 0x00)  # ±2g range
-        write_register(0x2A, 0x01)  # Active
-
-        # -----------------------------
-        # Read acceleration
-        # -----------------------------
+        write_register(0x2A, 0x00)
+        write_register(0x0E, 0x00)
+        write_register(0x2A, 0x01)
 
         def read_acceleration():
             data = read_register(0x01, 6)
@@ -179,52 +402,42 @@ def run():
                 if raw & 0x8000:
                     raw -= 65536
 
-                values.append((raw >> shift) / counts_per_g)
+                values.append(
+                    (raw >> shift) / counts_per_g
+                )
 
             return values[0], values[1], values[2]
 
-
-        # -----------------------------
-        # Measure resting baseline
-        # -----------------------------
-
         print("Calibrating—keep the sensor still")
 
-        base_x = 0
-        base_y = 0
-        base_z = 0
+        baseline = [0.0, 0.0, 0.0]
         samples = 50
 
         for _ in range(samples):
-            x, y, z = read_acceleration()
+            xyz = read_acceleration()
 
-            base_x += x
-            base_y += y
-            base_z += z
+            for i in range(3):
+                baseline[i] += xyz[i]
 
-            sleep(0.02)
+            wait_ms(20, light)
 
-        base_x /= samples
-        base_y /= samples
-        base_z /= samples
+        baseline = [value / samples for value in baseline]
 
-        print(
-            "Baseline:",
-            round(base_x, 2),
-            round(base_y, 2),
-            round(base_z, 2)
-        )
-
+        print("Baseline:", [round(v, 2) for v in baseline])
         print("Ready")
 
-        detect_loop(read_acceleration, (base_x, base_y, base_z), servo)
+        detect_loop(read_acceleration, baseline, servo, light)
+
     finally:
-        # Return to rest and release PWM even on Ctrl+C or a sensor error.
         try:
             set_servo(servo, SERVO_REST_US)
             sleep_ms(RETRACT_MS)
         finally:
-            servo.deinit()
+            try:
+                servo.deinit()
+            finally:
+                if light is not None:
+                    light.close()
 
 
 if __name__ == "__main__":

@@ -126,7 +126,7 @@ class HttpTests(unittest.TestCase):
 
 
 class UploadLoopTests(unittest.TestCase):
-    def exercise(self, send_results, age=0):
+    def exercise(self, send_results, age=0, light_enabled=False, incoming=None, pending=False):
         """Run the real upload loop with a fake radio and no physical thread."""
         fake_time = types.SimpleNamespace(ticks_ms=lambda: 5000, ticks_diff=ticks_diff,
                                           sleep_ms=lambda _: None)
@@ -141,12 +141,18 @@ class UploadLoopTests(unittest.TestCase):
             spec.loader.exec_module(firmware)
         api = Mock()
         api.send.side_effect = send_results
-        api.heartbeat.return_value = {'timezone': 'UTC'}
-        entry = {'id': 'b' * 32, 'pattern': [0, 400], 'created': 5000 - age}
+        api.heartbeat.return_value = {'timezone': 'UTC', 'local_hour': 7.5}
+        api.receive.return_value = {'cursor': 8 if incoming else 0, 'events': [incoming] if incoming else []}
+        entry = {'id': 'b' * 32, 'pattern': [0, 400], 'impacts': [0.3, 1.5], 'created': 5000 - age}
         firmware.shared['queue'].append(entry)
         firmware.shared['sensor_done'] = True
+        if incoming:
+            firmware.shared['receive_cursor'] = 7
+        if pending:
+            firmware.shared['incoming'] = {'id': 6, 'offsets': [0], 'impacts_g': None}
         config = {key: 'test' for key in ('wifi_ssid', 'wifi_password', 'supabase_url',
                                         'supabase_publishable_key', 'pair_id', 'pair_secret', 'side')}
+        config['rgb_led'] = {'enabled': light_enabled}
 
         def sleep(ms):
             if ms == 100:  # One successful loop (retries sleep for 3000 ms).
@@ -162,13 +168,20 @@ class UploadLoopTests(unittest.TestCase):
         self.assertEqual(firmware.shared['queue'], [])
         self.assertFalse(firmware.shared['running'])
         wlan.disconnect.assert_called_once()
+        api.heartbeat.assert_called_once_with(include_time=light_enabled)
+        self.assertEqual(firmware.shared['partner_clock'], (7.5, 5000) if light_enabled else None)
+        if incoming:
+            self.assertEqual(firmware.shared['receive_cursor'], 7)
+            self.assertEqual(firmware.shared['incoming'], {'id': 8, 'offsets': [0,300,1000], 'impacts_g': [.3,.8,1.5]})
+        if pending:
+            api.receive.assert_not_called()
         return api
 
     def test_timeout_retries_same_request_id_and_pattern(self):
         api = self.exercise([OSError('timeout after server accepted request'), {'id': 123}])
         self.assertEqual(api.send.call_count, 2)
         self.assertEqual(api.send.call_args_list[0], api.send.call_args_list[1])
-        self.assertEqual(api.send.call_args.args, ('b' * 32, [0, 400]))
+        self.assertEqual(api.send.call_args.args, ('b' * 32, [0, 400], [0.3, 1.5]))
 
     def test_expired_knock_is_not_uploaded(self):
         api = self.exercise([], age=61000)
@@ -177,6 +190,15 @@ class UploadLoopTests(unittest.TestCase):
     def test_paused_match_is_acknowledged_without_retry(self):
         api = self.exercise([{'id': None}])
         api.send.assert_called_once()
+
+    def test_heartbeat_passes_partner_time_to_light(self):
+        self.exercise([{'id': 123}], light_enabled=True)
+
+    def test_received_knock_waits_for_playback_before_advancing_cursor(self):
+        self.exercise([{'id': 123}], incoming={'id': 8, 'intervals_ms': [0,300,700], 'impacts_g': [.3,.8,1.5]})
+
+    def test_pending_playback_is_not_fetched_again(self):
+        self.exercise([{'id': 123}], pending=True)
 
 
 if __name__ == '__main__':

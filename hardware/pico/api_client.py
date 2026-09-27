@@ -132,9 +132,16 @@ class WindowAPI:
             else:
                 raw.close()
 
-    def send(self, request_id, pattern):
-        return self.rpc("window_pico_send_knock", {
-            "p_request_id": request_id, "p_intervals_ms": pattern})
+    def send(self, request_id, pattern, impacts=None):
+        if impacts is None:
+            return self.rpc("window_pico_send_knock", {
+                "p_request_id": request_id, "p_intervals_ms": pattern})
+        return self.rpc("window_pico_send_knock_with_strength", {
+            "p_request_id": request_id, "p_intervals_ms": pattern,
+            "p_impacts_g": impacts})
 
-    def heartbeat(self):
-        return self.rpc("window_get_partner")
+    def receive(self, after_id):
+        return self.rpc("window_pico_get_knocks", {"p_after_id": after_id})
+
+    def heartbeat(self, include_time=False):
+        return self.rpc("window_pico_get_partner" if include_time else "window_get_partner")
