@@ -29,8 +29,7 @@ What it does, in order:
   3. marks everything as the preloaded demo, so the app's "Reset demo" button returns to exactly this.
 
 Needs server/.env with SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY, and for Meta
-AI_PROVIDER=meta + META_API_KEY (same values as on Render). Uses whoever lives where right now, so run
-flip-roles.sql first if the roles are flipped.
+AI_PROVIDER=meta + META_API_KEY (same values as on Render). Always uses the fixed demo roles (sid in Atlanta, isha in Cancún).
 """
 from __future__ import annotations
 
@@ -54,17 +53,6 @@ load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
 import main
 import ai
 from db import get_supabase
-
-
-# The history always uses the original story, whatever the profiles say right now (they may be flipped for
-# the video). The script switches to these while loading, then puts the profiles back exactly as they were.
-ROLE_FIELDS = ("home_city", "country", "tz", "lat", "lng", "languages", "dream_places")
-ORIGINAL_ROLES = {
-    "sid": {"home_city": "Atlanta", "country": "United States", "tz": "America/New_York", "lat": 33.75, "lng": -84.39,
-            "languages": ["en"], "dream_places": ["Cancún"]},
-    "isha": {"home_city": "Cancún", "country": "Mexico", "tz": "America/Cancun", "lat": 21.16, "lng": -86.85,
-             "languages": ["es"], "dream_places": ["Atlanta"]},
-}
 
 
 def fail(message: str) -> None:
@@ -122,33 +110,28 @@ def main_cli() -> None:
     ids = main.demo_account_ids()
     if len(ids) < 2:
         fail("both demo accounts (sid and isha) must exist")
-    saved = {name: {k: main.profile(user_id).get(k) for k in ROLE_FIELDS} for name, user_id in ids.items()}
-    people = {name: {**main.profile(user_id), **ORIGINAL_ROLES[name]} for name, user_id in ids.items()}
+    before = {name: main.profile(user_id).get("home_city") for name, user_id in ids.items()}
+    people = {name: {**main.profile(user_id), **main.DEMO_ROLES[name]} for name, user_id in ids.items()}
     pair = [m for m in main.rows("matches") if {m.get("user_a"), m.get("user_b")} == set(ids.values())]
     if not pair:
         fail("sid and isha aren't matched. Match them in the app first.")
     match = max(pair, key=lambda m: m.get("created_at") or "")
     for name, p in people.items():
-        now = saved[name]
-        note = "" if now.get("home_city") == p["home_city"] else f"  (profile says {now.get('home_city')} right now; put back after)"
+        note = "" if before[name] == p["home_city"] else f"  (profile says {before[name]}; will be set back to {p['home_city']})"
         print(f"  {name:5} writes from {p['home_city']} in {p['languages'][0]}{note}")
     print(f"  {len(letters)} letters over {max(int(x['day']) for x in letters)} days")
     if not args.yes:
         print("\nNothing changed. Run again with --yes to replace the pair's letters with this history.")
         return
 
-    # the original roles while loading; restored in the finally below, even if something fails.
-    # A copy of the current roles is also written next to letters.json, just in case.
-    (folder / "roles-before-last-run.json").write_text(json.dumps(saved, indent=2, ensure_ascii=False))
-    for name, user_id in ids.items():
-        sb.table("profiles").update(ORIGINAL_ROLES[name]).eq("id", user_id).execute()
+    # the demo roles are fixed (sid in Atlanta, isha in Cancún): set them now and again at the end
+    main.enforce_demo_roles(ids)
     try:
         load(sb, ids, people, match, letters, folder)
     finally:
-        for name, user_id in ids.items():
-            sb.table("profiles").update(saved[name]).eq("id", user_id).execute()
+        main.enforce_demo_roles(ids)
         now = {name: main.profile(user_id).get("home_city") for name, user_id in ids.items()}
-        print(f"  profiles put back: sid lives in {now.get('sid')}, isha lives in {now.get('isha')}")
+        print(f"  demo roles: sid lives in {now.get('sid')}, isha lives in {now.get('isha')}")
 
 
 def load(sb: Any, ids: dict[str, str], people: dict[str, dict[str, Any]], match: dict[str, Any], letters: list[dict[str, Any]], folder: Path) -> None:

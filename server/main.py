@@ -72,6 +72,11 @@ class MatchRequest(BaseModel):
 @app.post("/match")
 def match(body: MatchRequest | None = None, _user: str = Depends(require_user)) -> list[dict[str, Any]]:
     force = bool(body and body.force)
+    try:
+        if _user in demo_account_ids().values():
+            enforce_demo_roles()
+    except Exception as error:  # never block matching over this
+        print(f"[demo] could not enforce roles: {error}", flush=True)
     sb = get_supabase()
     me = profile(_user)
     if not me.get("onboarded"):
@@ -145,14 +150,36 @@ def match(body: MatchRequest | None = None, _user: str = Depends(require_user)) 
 DEMO_USERNAMES = ("sid", "isha")  # same list as app/src/lib/config.ts DEMO_ACCOUNTS
 
 
+# The demo story is fixed: sid lives in Atlanta, isha in Cancún. Enforced on Reset demo, whenever a demo
+# account reaches matching (so a stray tap during a live sign-up can't stick), and by demo_history.py.
+DEMO_ROLES: dict[str, dict[str, Any]] = {
+    "sid": {"home_city": "Atlanta", "country": "United States", "tz": "America/New_York", "lat": 33.75, "lng": -84.39,
+            "languages": ["en"], "dream_places": ["Cancún"]},
+    "isha": {"home_city": "Cancún", "country": "Mexico", "tz": "America/Cancun", "lat": 21.16, "lng": -86.85,
+             "languages": ["es"], "dream_places": ["Atlanta"]},
+}
+_demo_ids: dict[str, Any] = {"at": 0.0, "ids": {}}
+
+
 def demo_account_ids() -> dict[str, str]:
-    """username -> user id for the demo accounts that exist."""
+    """username -> user id for the demo accounts that exist (cached for 10 minutes)."""
+    import time
+    if time.time() - _demo_ids["at"] < 600 and len(_demo_ids["ids"]) == len(DEMO_USERNAMES):
+        return dict(_demo_ids["ids"])
     ids: dict[str, str] = {}
     for user in get_supabase().auth.admin.list_users(page=1, per_page=1000):
         name = (user.email or "").split("@")[0]
         if name in DEMO_USERNAMES:
             ids[name] = user.id
-    return ids
+    _demo_ids.update(at=time.time(), ids=ids)
+    return dict(ids)
+
+
+def enforce_demo_roles(ids: dict[str, str] | None = None) -> None:
+    """Put the demo accounts back to their fixed cities, languages and dream cities."""
+    ids = ids if ids is not None else demo_account_ids()
+    for name, user_id in ids.items():
+        get_supabase().table("profiles").update(DEMO_ROLES[name]).eq("id", user_id).execute()
 
 
 @app.post("/demo/reset")
@@ -203,6 +230,7 @@ def demo_reset(_user: str = Depends(require_user)) -> dict[str, Any]:
     # 4) no knocks between them, and nobody left mid-replay
     sb.table("knocks").delete().in_("from_user", [a, b]).in_("to_user", [a, b]).execute()
     sb.table("profiles").update({"replay": False, "looking_at": None}).in_("id", [a, b]).execute()
+    enforce_demo_roles(ids)
     return {"ok": True, "letters_removed": len(live)}
 
 
