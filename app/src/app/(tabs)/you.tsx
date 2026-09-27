@@ -101,7 +101,7 @@ export default function You() {
           <View key={m.id} style={{ gap: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ flex: 1 }}>
-                <T style={{ fontFamily: fonts.semibold }}>{m.partner.name} · {m.city}</T>
+                <T style={{ fontFamily: fonts.semibold }}>{m.partner.name} · {m.partner.home_city || m.city}</T>
                 <T variant="small">Day {dayNumber(m.created_at)} · {m.status === 'paused' ? 'paused' : 'active'}</T>
               </View>
               <Pressable

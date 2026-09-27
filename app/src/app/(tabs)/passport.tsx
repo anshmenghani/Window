@@ -88,16 +88,17 @@ export default function Passport() {
 
   const match = matches.find((m) => m.id === selected);
   const p = match?.partner;
+  const theirCity = p?.home_city || match?.city;
 
   const share = () => {
     if (!plan || !match) return;
     const lines = plan.map((s) => `Day ${s.day}: ${s.place} — "${s.tip}"`).join('\n');
-    Share.share({ message: `When I visit ${match.city} (built from ${p?.name}'s windows on Window)\n\n${lines}` });
+    Share.share({ message: `When I visit ${theirCity} (built from ${p?.name}'s windows on Window)\n\n${lines}` });
   };
 
   return (
     <Screen scroll gap={18} padBottom={TAB_BAR_SPACE} edges={['top']} textured style={{ paddingHorizontal: 20 }}>
-      <Ledger label="Passport" note={match ? `${match.city} · with ${p?.name}` : undefined} />
+      <Ledger label="Passport" note={match ? `${theirCity} · with ${p?.name}` : undefined} />
 
       {bond && p ? <BondCard bond={bond} name={p.name} /> : null}
 
@@ -133,7 +134,7 @@ export default function Passport() {
       {match ? (
         <>
           <View>
-            <T variant="heading">When I visit {match.city}</T>
+            <T variant="heading">When I visit {theirCity}</T>
             <T variant="small">Built from places {p?.name} showed you</T>
           </View>
           {loadingPlan ? (
@@ -154,7 +155,7 @@ export default function Passport() {
                   </View>
                 </Animated.View>
               ))}
-              <Button variant="outline" title={`Share my ${match.city} plan`} onPress={share} style={{ marginTop: 2 }} />
+              <Button variant="outline" title={`Share my ${theirCity} plan`} onPress={share} style={{ marginTop: 2 }} />
             </View>
           ) : (
             <T variant="muted">Save a few of {p?.name}&apos;s windows and your plan will build itself here.</T>

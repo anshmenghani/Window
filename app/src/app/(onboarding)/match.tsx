@@ -70,7 +70,7 @@ export default function MatchReveal() {
         </View>
         <View style={{ padding: 20, gap: 14 }}>
           <Animated.View style={[{ position: 'absolute', right: 16, top: 14 }, stampStyle]}>
-            <Stamp label={match.city} sub={p.country} color={colors.terracotta} edgeColor={colors.postcard} tilt={4}>
+            <Stamp label={p.home_city || match.city} sub={p.country} color={colors.terracotta} edgeColor={colors.postcard} tilt={4}>
               <Svg width={36} height={38} viewBox="0 0 40 42" fill="none" stroke={colors.postcard} strokeWidth={1.8}>
                 <Path d="M8 12h24M11 12l-3 5h24l-3-5M12 17v8M28 17v8M6 25h28M10 25l-3 5h26l-3-5M13 30v10M27 30v10" />
               </Svg>
