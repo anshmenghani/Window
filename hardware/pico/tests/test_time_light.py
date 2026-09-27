@@ -50,6 +50,8 @@ class LightTests(unittest.TestCase):
             spec.loader.exec_module(module)
         self.TimeLight = module.TimeLight
         self.color_for_hour = module.color_for_hour
+        self.color_for_sun = module.color_for_sun
+        self.solar_elevation = module.solar_elevation
 
     def make(self, **extra):
         config = dict(enabled=True, red_pin=11, green_pin=12, blue_pin=13,
@@ -62,6 +64,49 @@ class LightTests(unittest.TestCase):
         self.assertEqual(self.color_for_hour(24), self.color_for_hour(0))
         for actual, expected in zip(self.color_for_hour(8), (0.675, 0.375, 0.515)):
             self.assertAlmostEqual(actual, expected)
+
+    def test_solar_elevation_tracks_season_and_time(self):
+        # Atlanta near local solar noon: the summer Sun must be much higher
+        # than the winter Sun. This catches regressions back to fixed hours.
+        summer, _ = self.solar_elevation(1782057600, 33.75, -84.39)
+        winter, _ = self.solar_elevation(1797872400, 33.75, -84.39)
+        self.assertGreater(summer, winter + 25)
+
+        # Equator near March equinox noon UTC: Sun is almost overhead.
+        equinox, rising = self.solar_elevation(1774008000, 0, 0)
+        self.assertGreater(equinox, 85)
+        self.assertTrue(rising)
+
+    def test_real_solar_snapshot_drives_led(self):
+        light = self.make()
+        snapshot = {
+            'local_hour': 12.0,
+            'server_epoch': 1782057600,
+            'latitude': 33.75,
+            'longitude': -84.39,
+            'received_at': 0,
+        }
+        light.update(0, snapshot)
+        elevation, rising = self.solar_elevation(
+            snapshot['server_epoch'], snapshot['latitude'], snapshot['longitude']
+        )
+        expected = [int(c * 65535) for c in self.color_for_sun(elevation, rising)]
+        self.assertEqual([c.last_duty for c in light.channels], expected)
+
+    def test_missing_coordinates_falls_back_to_clock_palette(self):
+        light = self.make()
+        snapshot = {
+            'local_hour': 7.0,
+            'server_epoch': 1782057600,
+            'latitude': None,
+            'longitude': None,
+            'received_at': 0,
+        }
+        light.update(0, snapshot)
+        self.assertEqual(
+            [c.last_duty for c in light.channels],
+            [int(c * 65535) for c in (1.0, 0.2, 0.03)],
+        )
 
     def test_unknown_time_keeps_led_off(self):
         light = self.make()
