@@ -29,10 +29,12 @@ What happens once it's set up:
 | Isha changes her city in the app | Sid's window light follows her new time zone |
 | Pause the pen pals in the You tab | The windows stop knocking each other (and the app), until you resume |
 
+For the updated preparation tool and acceptance test, start with [hardware/INTEGRATION.md](hardware/INTEGRATION.md).
+
 ## Setup (about 15 minutes)
 
 ### 1. Run the SQL, in this order
-Supabase → **SQL Editor → New query**, paste, **Run**. All six are safe to run again.
+Supabase → **SQL Editor → New query**, paste, **Run**. All seven are safe to run again.
 
 1. `supabase/schema.sql` (the app; you've already run this, re-run it if you haven't since the AI update)
 2. `hardware/supabase/schema.sql` (the hardware tables)
@@ -40,6 +42,7 @@ Supabase → **SQL Editor → New query**, paste, **Run**. All six are safe to r
 4. `supabase/pico.sql` (retry-safe Pico sending)
 5. `supabase/pico_time_light.sql` (partner time for the RGB LED)
 6. `supabase/pico_playback.sql` (servo playback and impact strength)
+7. `supabase/pico_reliability.sql` (validated rhythms, independent self-tests, block checks and ordered delivery)
 
 On a Mac you can copy each file with, for example:
 ```bash
