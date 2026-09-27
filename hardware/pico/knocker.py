@@ -1,6 +1,6 @@
 from machine import Pin, SoftI2C, PWM
 from time import sleep_ms, ticks_ms, ticks_diff
-from math import sqrt
+from math import sqrt, sin, cos, asin, atan2, radians, degrees, pi
 
 THRESHOLD = 0.25
 COOLDOWN = 250
@@ -70,24 +70,89 @@ class PIOPWM:
         self.active = False
 
 
-ANCHORS = (
-    (0.0, (0.03, 0.00, 0.10)),
-    (5.0, (0.08, 0.01, 0.16)),
-    (7.0, (1.00, 0.20, 0.03)),
-    (9.0, (0.35, 0.55, 1.00)),
-    (15.0, (0.18, 0.48, 1.00)),
-    (18.5, (1.00, 0.28, 0.02)),
-    (21.0, (0.30, 0.03, 0.35)),
-    (24.0, (0.03, 0.00, 0.10)),
-)
+SOLAR_NIGHT = (0.03, 0.00, 0.10)
+SOLAR_NAUTICAL = (0.08, 0.01, 0.16)
+SOLAR_TWILIGHT = (0.30, 0.03, 0.35)
+SOLAR_SUNRISE = (1.00, 0.20, 0.03)
+SOLAR_DAY = (0.30, 0.55, 1.00)
+SOLAR_HIGH_DAY = (0.18, 0.48, 1.00)
+
+
+def _blend(first, last, amount):
+    amount = max(0.0, min(1.0, amount))
+    return tuple(a + (b - a) * amount for a, b in zip(first, last))
 
 
 def color_for_hour(hour):
+    # Backward-compatible fallback when a linked profile has no usable lat/lng.
+    # This is intentionally only a fallback; normal operation uses solar elevation.
+    anchors = (
+        (0.0, SOLAR_NIGHT),
+        (5.0, SOLAR_NAUTICAL),
+        (7.0, SOLAR_SUNRISE),
+        (9.0, SOLAR_DAY),
+        (15.0, SOLAR_HIGH_DAY),
+        (18.5, SOLAR_SUNRISE),
+        (21.0, SOLAR_TWILIGHT),
+        (24.0, SOLAR_NIGHT),
+    )
     hour %= 24
-    for (start, first), (end, last) in zip(ANCHORS, ANCHORS[1:]):
+    for (start, first), (end, last) in zip(anchors, anchors[1:]):
         if start <= hour <= end:
-            blend = (hour - start) / (end - start)
-            return tuple(a + (b - a) * blend for a, b in zip(first, last))
+            return _blend(first, last, (hour - start) / (end - start))
+
+
+def solar_elevation(epoch_seconds, latitude, longitude):
+    """Approximate apparent solar elevation and whether the Sun is rising.
+
+    Accuracy is easily sufficient for an ambient RGB sunrise/sunset display and
+    avoids a heavyweight astronomy dependency on MicroPython.
+    """
+    days = float(epoch_seconds) / 86400.0 - 10957.5  # days since J2000 noon
+    mean_anomaly = radians((357.529 + 0.98560028 * days) % 360)
+    mean_longitude = radians((280.459 + 0.98564736 * days) % 360)
+    ecliptic_longitude = (
+        mean_longitude
+        + radians(1.915) * sin(mean_anomaly)
+        + radians(0.020) * sin(2 * mean_anomaly)
+    )
+    obliquity = radians(23.439 - 0.00000036 * days)
+    right_ascension = atan2(
+        cos(obliquity) * sin(ecliptic_longitude),
+        cos(ecliptic_longitude),
+    )
+    declination = asin(sin(obliquity) * sin(ecliptic_longitude))
+    gmst_hours = (18.697374558 + 24.06570982441908 * days) % 24
+    local_sidereal = radians((gmst_hours * 15 + longitude) % 360)
+    hour_angle = (local_sidereal - right_ascension + pi) % (2 * pi) - pi
+    lat = radians(latitude)
+    altitude = asin(
+        max(-1.0, min(1.0,
+            sin(lat) * sin(declination)
+            + cos(lat) * cos(declination) * cos(hour_angle)
+        ))
+    )
+    return degrees(altitude), hour_angle < 0
+
+
+def color_for_sun(elevation, rising):
+    # Civil/nautical/astronomical twilight thresholds make the window react to
+    # the real season and latitude rather than fixed clock hours.
+    if elevation <= -18:
+        return SOLAR_NIGHT
+    if elevation <= -12:
+        return _blend(SOLAR_NIGHT, SOLAR_NAUTICAL, (elevation + 18) / 6)
+    if elevation <= -6:
+        return _blend(SOLAR_NAUTICAL, SOLAR_TWILIGHT, (elevation + 12) / 6)
+    if elevation <= 0:
+        edge = SOLAR_SUNRISE if rising else (1.00, 0.28, 0.02)
+        return _blend(SOLAR_TWILIGHT, edge, (elevation + 6) / 6)
+    if elevation <= 12:
+        edge = SOLAR_SUNRISE if rising else (1.00, 0.28, 0.02)
+        return _blend(edge, SOLAR_DAY, elevation / 12)
+    if elevation <= 45:
+        return _blend(SOLAR_DAY, SOLAR_HIGH_DAY, (elevation - 12) / 33)
+    return SOLAR_HIGH_DAY
 
 
 class TimeLight:
@@ -96,6 +161,9 @@ class TimeLight:
         self.diff = ticks_diff
         self.snapshot = None
         self.hour = None
+        self.epoch = None
+        self.latitude = None
+        self.longitude = None
         self.last_tick = None
         self.last_render = None
         self.enabled = bool(config.get("enabled", False))
@@ -125,23 +193,61 @@ class TimeLight:
     def update(self, now, snapshot):
         if not self.enabled:
             return
+
         if snapshot is not None and snapshot != self.snapshot:
-            hour, received_at = snapshot
-            if not isinstance(hour, (int, float)) or not 0 <= hour < 24:
-                raise ValueError("Invalid partner local_hour from Supabase")
-            self.hour = (hour + max(0, self.diff(now, received_at)) / 3600000) % 24
+            if isinstance(snapshot, dict):
+                hour = snapshot.get("local_hour")
+                epoch = snapshot.get("server_epoch")
+                latitude = snapshot.get("latitude")
+                longitude = snapshot.get("longitude")
+                received_at = snapshot.get("received_at")
+                if type(received_at) is not int:
+                    raise ValueError("Invalid partner-light receive timestamp")
+                if not isinstance(hour, (int, float)) or not 0 <= hour < 24:
+                    raise ValueError("Invalid partner local_hour from Supabase")
+                self.hour = (hour + max(0, self.diff(now, received_at)) / 3600000) % 24
+                if isinstance(epoch, (int, float)):
+                    self.epoch = float(epoch) + max(0, self.diff(now, received_at)) / 1000.0
+                else:
+                    self.epoch = None
+                if (isinstance(latitude, (int, float)) and -90 <= latitude <= 90
+                        and isinstance(longitude, (int, float)) and -180 <= longitude <= 180):
+                    self.latitude = float(latitude)
+                    self.longitude = float(longitude)
+                else:
+                    self.latitude = self.longitude = None
+                self.last_tick = now
+            else:
+                # Old tuple format is kept for the standalone local-light preview
+                # and for compatibility with older tests/configurations.
+                hour, received_at = snapshot
+                if not isinstance(hour, (int, float)) or not 0 <= hour < 24:
+                    raise ValueError("Invalid partner local_hour from Supabase")
+                self.hour = (hour + max(0, self.diff(now, received_at)) / 3600000) % 24
+                self.epoch = None
+                self.latitude = self.longitude = None
+                self.last_tick = now
             self.snapshot = snapshot
-            self.last_tick = now
             self.last_render = None
         elif self.hour is not None:
-            # Advance incrementally so the wrapping tick counter remains safe.
-            self.hour = (self.hour + max(0, self.diff(now, self.last_tick)) / 3600000) % 24
+            elapsed_ms = max(0, self.diff(now, self.last_tick))
+            self.hour = (self.hour + elapsed_ms / 3600000) % 24
+            if self.epoch is not None:
+                self.epoch += elapsed_ms / 1000.0
             self.last_tick = now
+
         if self.hour is None:
             return
         if self.last_render is not None and self.diff(now, self.last_render) < 1000:
             return
-        for channel, value in zip(self.channels, color_for_hour(self.hour)):
+
+        if self.epoch is not None and self.latitude is not None and self.longitude is not None:
+            elevation, rising = solar_elevation(self.epoch, self.latitude, self.longitude)
+            color = color_for_sun(elevation, rising)
+        else:
+            color = color_for_hour(self.hour)
+
+        for channel, value in zip(self.channels, color):
             duty = int(value * self.brightness * 65535)
             channel.duty_u16(65535 - duty if self.anode else duty)
         self.last_render = now
