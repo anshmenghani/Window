@@ -18,7 +18,7 @@ STRIKE_HOLD_MS = 120
 RETRACT_MS = 120
 SETTLE_MS = 500
 
-LOCAL_START_HOUR = 12.0  # Set to local time when starting, e.g. 18.5 = 6:30 PM.
+LOCAL_START_HOUR = 00.0  # Set to local time when starting, e.g. 18.5 = 6:30 PM.
 LIGHT_TIME_SPEED = 1.0  # Use 3600.0 to preview one hour of color per second.
 RGB_BRIGHTNESS = 0.55
 

@@ -9,7 +9,7 @@ From your Supabase project, copy:
 - Project URL: `https://YOUR_PROJECT.supabase.co`
 - Publishable key: `sb_publishable_...`
 
-The Raspberry Pis and shipped app should use the **publishable** key.
+The Pico Ws and shipped app should use the **publishable** key.
 
 Do not place a Supabase secret/service-role key on a Pi or in frontend/mobile code.
 
@@ -49,13 +49,11 @@ It returns:
 
 Put the same pair ID/secret on both devices. One is side `A`, the other side `B`.
 
-## 4. Pi config
+## 4. Pico config
 
-```bash
-cd pi
-cp config.example.json config.json
-nano config.json
-```
+Copy `pico/config.example.json` to `config.json`, then fill in the values below.
+Upload the completed file to each Pico with the firmware files listed in
+`pico/README.md`.
 
 Fill in:
 
@@ -109,28 +107,18 @@ python3 tools/app_cli.py \
   receive --after-id 0
 ```
 
-## 7. Start the Pi daemon
+## 7. Start the Picos
 
-```bash
-cd pi
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python daemon.py --config config.json
-```
-
-Simulation:
-
-```bash
-python daemon.py --config config.json --simulate
-```
+Upload `main.py`, `knocker.py`, `window_server.py`, `supabase_client.py`, your
+filled-in `config.json`, and `tls_pin.json` to each Pico. Restart both devices;
+`main.py` starts the firmware automatically.
 
 ## Latency
 
-The Pi currently polls the secure `window_get_knocks` RPC every ~450 ms:
+Each Pico polls the secure `window_pico_get_knocks` RPC every second by default:
 
 ```json
-"poll_interval_ms": 450
+"poll_ms": 1000
 ```
 
 That keeps the database tables private while still making remote knocks feel nearly

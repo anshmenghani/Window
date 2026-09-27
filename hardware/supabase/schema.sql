@@ -1,7 +1,7 @@
 -- Window Sync / Supabase backend
 -- Run this file once in Supabase Dashboard -> SQL Editor.
 --
--- The Raspberry Pis and app use ONLY the RPC functions below.
+-- The Pico Ws and app use ONLY the RPC functions below.
 -- Underlying tables are not directly readable/writable by public clients.
 
 create extension if not exists pgcrypto with schema extensions;
