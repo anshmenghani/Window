@@ -185,11 +185,23 @@ def run():
                     last_heartbeat = ticks_ms()
                     if light_enabled:
                         hour = partner.get("local_hour")
+                        epoch = partner.get("server_epoch")
+                        latitude = partner.get("latitude")
+                        longitude = partner.get("longitude")
                         if not isinstance(hour, (int, float)) or not 0 <= hour < 24:
                             raise ValueError("Missing partner local_hour; apply supabase/pico_time_light.sql")
+                        if not isinstance(epoch, (int, float)):
+                            raise ValueError("Missing server_epoch; re-apply supabase/pico_time_light.sql")
                         with lock:
-                            shared["partner_clock"] = (hour, last_heartbeat)
-                    print("[online] Partner timezone:", partner.get("timezone"))
+                            shared["partner_clock"] = {
+                                "local_hour": hour,
+                                "server_epoch": epoch,
+                                "latitude": latitude,
+                                "longitude": longitude,
+                                "received_at": last_heartbeat,
+                            }
+                    print("[online] Partner timezone:", partner.get("timezone"),
+                          "solar location:", partner.get("latitude"), partner.get("longitude"))
                 with lock:
                     pending = shared["incoming"] is not None
                     cursor = shared["receive_cursor"]
