@@ -17,7 +17,7 @@ class PlaybackTests(unittest.TestCase):
             ticks_ms=lambda: self.clock % (1 << 30),
             ticks_diff=lambda a, b: ((a - b + (1 << 29)) % (1 << 30)) - (1 << 29))
         fake_machine = types.SimpleNamespace(Pin=object, SoftI2C=object, PWM=object)
-        path = Path(__file__).resolve().parents[1] / 'knocker_local.py'
+        path = Path(__file__).resolve().parents[1] / 'knocker.py'
         spec = importlib.util.spec_from_file_location('knocker_test', path)
         self.module = importlib.util.module_from_spec(spec)
         fake_rp2 = types.SimpleNamespace(PIO=types.SimpleNamespace(OUT_LOW=0), StateMachine=object,

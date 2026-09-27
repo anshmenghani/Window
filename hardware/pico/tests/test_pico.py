@@ -9,63 +9,20 @@ import unittest
 from unittest.mock import Mock, mock_open, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from rhythm import Detector
-import api_client
+import supabase_client
 
 
 def ticks_diff(a, b):
     return ((a - b + (1 << 29)) % (1 << 30)) - (1 << 29)
 
 
-class RhythmTests(unittest.TestCase):
-    def make(self, **config):
-        return Detector([0, 0, 1], config, ticks_diff)
-
-    def test_grouping_and_cooldown(self):
-        d = self.make()
-        for time in (0, 100, 400, 1000):
-            self.assertIsNone(d.update([0.5, 0, 1], time))
-        self.assertEqual(d.update([0, 0, 1], 1900), [0, 400, 600])
-        self.assertIsNone(d.update([0, 0, 1], 3000))
-
-    def test_tick_wrap(self):
-        d = self.make()
-        d.update([0.5, 0, 1], (1 << 30) - 200)
-        d.update([0.5, 0, 1], 200)
-        self.assertEqual(d.update([0, 0, 1], 1100), [0, 400])
-
-    def test_new_tap_after_gap_starts_next_pattern(self):
-        d = self.make()
-        d.update([0.5, 0, 1], 0)
-        self.assertEqual(d.update([0.5, 0, 1], 1000), [0])
-        self.assertEqual(d.update([0, 0, 1], 1900), [0])
-
-    def test_maximum_taps(self):
-        d = self.make(max_knocks=2)
-        d.update([0.5, 0, 1], 0)
-        self.assertEqual(d.update([0.5, 0, 1], 400), [0, 400])
-        self.assertIsNone(d.update([0, 0, 1], 1500))
-
-    def test_duration_limit(self):
-        d = self.make(sequence_gap_ms=10000, max_knocks=20)
-        for time in (0, 9000, 18000, 27000):
-            self.assertIsNone(d.update([0.5, 0, 1], time))
-        self.assertEqual(d.update([0.5, 0, 1], 36000), [0, 9000, 9000, 9000])
-        self.assertEqual(d.update([0, 0, 1], 46000), [0])
-
-    def test_bad_config(self):
-        for config in ({"max_knocks": 21}, {"cooldown_ms": 900}, {"sequence_gap_ms": 10001}):
-            with self.assertRaises(ValueError):
-                self.make(**config)
-
-
 class HttpTests(unittest.TestCase):
     def test_content_length(self):
-        self.assertEqual(api_client.read_response(io.BytesIO(
+        self.assertEqual(supabase_client.read_response(io.BytesIO(
             b'HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\n{"id":1}')), {"id": 1})
 
     def test_chunked(self):
-        self.assertEqual(api_client.read_response(io.BytesIO(
+        self.assertEqual(supabase_client.read_response(io.BytesIO(
             b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n'
             b'4\r\n{"id\r\n4\r\n":1}\r\n0\r\n\r\n')), {"id": 1})
 
@@ -73,11 +30,11 @@ class HttpTests(unittest.TestCase):
         for response in (b'HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\n{',
                          b'HTTP/1.1 200 OK\r\nContent-Length: 9000\r\n\r\n'):
             with self.assertRaises(OSError):
-                api_client.read_response(io.BytesIO(response))
+                supabase_client.read_response(io.BytesIO(response))
 
     def test_error_does_not_echo_body(self):
         with self.assertRaises(OSError) as caught:
-            api_client.read_response(io.BytesIO(
+            supabase_client.read_response(io.BytesIO(
                 b'HTTP/1.1 403 Forbidden\r\nContent-Length: 6\r\n\r\nsecret'))
         self.assertNotIn('secret', str(caught.exception))
 
@@ -106,13 +63,13 @@ class HttpTests(unittest.TestCase):
                     self.verify_callback(certificate, 0)
                     return conn
 
-            api = api_client.WindowAPI.__new__(api_client.WindowAPI)
+            api = supabase_client.WindowAPI.__new__(supabase_client.WindowAPI)
             api.host, api.key = 'test.supabase.co', 'public-key'
             api.params = {'p_pair_secret': 'private-secret'}
             api.fingerprint = hashlib.sha256(b'trusted').hexdigest()
-            with patch.object(api_client.socket, 'getaddrinfo', return_value=[(2, 1, 6, '', ('host', 443))]), \
-                 patch.object(api_client.socket, 'socket', return_value=conn), \
-                 patch.object(api_client.ssl, 'SSLContext', Context):
+            with patch.object(supabase_client.socket, 'getaddrinfo', return_value=[(2, 1, 6, '', ('host', 443))]), \
+                 patch.object(supabase_client.socket, 'socket', return_value=conn), \
+                 patch.object(supabase_client.ssl, 'SSLContext', Context):
                 if expected_writes:
                     self.assertEqual(api.send('a' * 32, [0, 400]), {'id': 1})
                     body = json.loads(conn.written.split(b'\r\n\r\n')[1])
@@ -133,11 +90,10 @@ class UploadLoopTests(unittest.TestCase):
         wlan = Mock()
         wlan.isconnected.return_value = True
         fake_network = types.SimpleNamespace(STA_IF=0, WLAN=lambda _: wlan)
-        fake_sensor = types.SimpleNamespace(Sensor=Mock())
-        path = Path(__file__).resolve().parents[1] / 'knocker_supabase.py'
+        path = Path(__file__).resolve().parents[1] / 'window_server.py'
         spec = importlib.util.spec_from_file_location('pico_main_test', path)
         firmware = importlib.util.module_from_spec(spec)
-        with patch.dict(sys.modules, {'time': fake_time, 'network': fake_network, 'sensor': fake_sensor}):
+        with patch.dict(sys.modules, {'time': fake_time, 'network': fake_network}):
             spec.loader.exec_module(firmware)
         api = Mock()
         api.send.side_effect = send_results

@@ -1,5 +1,5 @@
 from machine import Pin, SoftI2C, PWM
-from time import sleep, sleep_ms, ticks_ms, ticks_diff
+from time import sleep_ms, ticks_ms, ticks_diff
 from math import sqrt
 
 THRESHOLD = 0.25
@@ -254,6 +254,58 @@ def hardware_config():
     }
 
 
+class Sensor:
+    def __init__(self, config):
+        self.i2c = SoftI2C(
+            sda=Pin(config.get("sda", 18)),
+            scl=Pin(config.get("scl", 19)),
+            freq=config.get("frequency", 50000),
+        )
+        sleep_ms(200)
+        devices = self.i2c.scan()
+        self.address = next((a for a in (0x1C, 0x1D) if a in devices), None)
+        if self.address is None:
+            raise RuntimeError(
+                "MMA845x missing; check SDA GP18, SCL GP19, 3V3 OUT and GND"
+            )
+        chip_id = self.read_register(0x0D)[0]
+        settings = {0x1A: (2, 4096), 0x2A: (4, 1024), 0x3A: (6, 256)}
+        if chip_id not in settings:
+            raise RuntimeError("Unknown accelerometer ID: " + hex(chip_id))
+        self.shift, self.counts_per_g = settings[chip_id]
+        self.write_register(0x2A, 0)
+        self.write_register(0x0E, 0)
+        self.write_register(0x2A, 1)
+        print("[sensor] MMA845x", hex(chip_id))
+
+    def read_register(self, register, length=1):
+        self.i2c.writeto(self.address, bytes([register]), False)
+        return self.i2c.readfrom(self.address, length)
+
+    def write_register(self, register, value):
+        self.i2c.writeto(self.address, bytes([register, value]))
+
+    def read(self):
+        data = self.read_register(1, 6)
+        values = []
+        for i in range(0, 6, 2):
+            raw = (data[i] << 8) | data[i + 1]
+            if raw & 0x8000:
+                raw -= 65536
+            values.append((raw >> self.shift) / self.counts_per_g)
+        return values
+
+    def calibrate(self, light=None):
+        print("[sensor] Calibrating: keep the window still")
+        baseline = [0.0, 0.0, 0.0]
+        for _ in range(50):
+            xyz = self.read()
+            for i in range(3):
+                baseline[i] += xyz[i] / 50
+            wait_ms(20, light)
+        return baseline
+
+
 class KnockRecorder:
     def __init__(self, baseline, config=None):
         settings = hardware_config()["detection"]
@@ -347,86 +399,11 @@ def run():
         set_servo(servo, SERVO_REST_US)
         wait_ms(SETTLE_MS, light)
 
-        i2c = SoftI2C(
-            sda=Pin(18),
-            scl=Pin(19),
-            freq=50000
-        )
-
-        sleep(0.2)
-
-        devices = i2c.scan()
-        print("Found devices:", [hex(d) for d in devices])
-
-        if 0x1C in devices:
-            address = 0x1C
-        elif 0x1D in devices:
-            address = 0x1D
-        else:
-            raise Exception(
-                "MMA845x not found. Check SDA GP18, SCL GP19, power and GND."
-            )
-
-        def read_register(register, length=1):
-            i2c.writeto(address, bytes([register]), False)
-            return i2c.readfrom(address, length)
-
-        def write_register(register, value):
-            i2c.writeto(address, bytes([register, value]))
-
-        chip_id = read_register(0x0D)[0]
-        print("Chip ID:", hex(chip_id))
-
-        settings = {
-            0x1A: (2, 4096),
-            0x2A: (4, 1024),
-            0x3A: (6, 256),
-        }
-
-        if chip_id not in settings:
-            raise Exception("Unknown sensor ID: " + hex(chip_id))
-
-        shift, counts_per_g = settings[chip_id]
-
-        write_register(0x2A, 0x00)
-        write_register(0x0E, 0x00)
-        write_register(0x2A, 0x01)
-
-        def read_acceleration():
-            data = read_register(0x01, 6)
-            values = []
-
-            for i in range(0, 6, 2):
-                raw = (data[i] << 8) | data[i + 1]
-
-                if raw & 0x8000:
-                    raw -= 65536
-
-                values.append(
-                    (raw >> shift) / counts_per_g
-                )
-
-            return values[0], values[1], values[2]
-
-        print("Calibrating—keep the sensor still")
-
-        baseline = [0.0, 0.0, 0.0]
-        samples = 50
-
-        for _ in range(samples):
-            xyz = read_acceleration()
-
-            for i in range(3):
-                baseline[i] += xyz[i]
-
-            wait_ms(20, light)
-
-        baseline = [value / samples for value in baseline]
-
+        sensor = Sensor(hardware_config()["sensor"])
+        baseline = sensor.calibrate(light)
         print("Baseline:", [round(v, 2) for v in baseline])
         print("Ready")
-
-        detect_loop(read_acceleration, baseline, servo, light)
+        detect_loop(sensor.read, baseline, servo, light)
 
     finally:
         try:

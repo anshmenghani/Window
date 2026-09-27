@@ -1,8 +1,8 @@
-# Matching local and Supabase behavior
+# Pico W setup
 
-`knocker_local.py` is the shared source of the recorder, impact-to-servo mapping,
-servo playback, RGB color curve and PIO LED driver. It still runs by itself for
-local testing. Importing it from `knocker_supabase.py` does not start local mode.
+`knocker.py` contains the accelerometer, recorder, servo playback and RGB light.
+It also runs by itself for local testing. `window_server.py` adds Wi-Fi and
+Supabase communication; importing `knocker.py` does not start local mode.
 
 | Behavior | Local mode | Supabase mode |
 |---|---|---|
@@ -46,19 +46,19 @@ Save these files in the Pico's filesystem root:
 
 ```text
 main.py
-knocker_supabase.py
-knocker_local.py
-api_client.py
-sensor.py
+window_server.py
+knocker.py
+supabase_client.py
 config.json
 tls_pin.json
 ```
 
 `config.json` is your filled-in copy of `config.example.json`, not the example
 with placeholders. `tls_pin.json` is produced on your computer by `provision.py`.
-Preserve your actual credentials and side assignment when updating files.
-The standalone helper files `rhythm.py`, `time_light.py` and `led_pwm.py` are no
-longer needed by either entry point; old copies can remain on the device.
+Preserve your actual credentials and side assignment when updating files. Delete
+old copies of `knocker_local.py`, `knocker_supabase.py`, `api_client.py`,
+`sensor.py`, `rhythm.py`, `time_light.py`, `led_pwm.py`, and `rgb_pin_test.py`
+from the Pico so there is only one version of each feature.
 
 **For an older config:** remove its `detection` section to inherit the local
 defaults, or update it to the new example (250 ms cooldown, 1500 ms gap, 60 ms

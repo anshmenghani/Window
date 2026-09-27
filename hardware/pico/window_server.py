@@ -6,8 +6,7 @@ import network
 import os
 from time import ticks_ms, ticks_diff, sleep_ms
 
-from api_client import WindowAPI
-from sensor import Sensor
+from supabase_client import WindowAPI
 
 lock = _thread.allocate_lock()
 shared = {"running": True, "queue": [], "sensor_error": None, "sensor_done": False,
@@ -65,7 +64,7 @@ def capture(config):
     light = None
     servo = None
     try:
-        import knocker_local as knocker
+        import knocker
         defaults = knocker.hardware_config()
         settings = {}
         for section in defaults:
@@ -77,7 +76,7 @@ def capture(config):
         servo.freq(50)
         knocker.set_servo(servo, knocker.SERVO_REST_US)
         knocker.wait_ms(knocker.SETTLE_MS, partner_light)
-        sensor = Sensor(settings["sensor"])
+        sensor = knocker.Sensor(settings["sensor"])
         recorder = knocker.KnockRecorder(sensor.calibrate(), settings["detection"])
         print("[sensor] Ready to knock")
         while running():

@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from api_client import WindowAPI
+from supabase_client import WindowAPI
 
 
 class NetworkPlaybackTests(unittest.TestCase):
@@ -14,11 +14,10 @@ class NetworkPlaybackTests(unittest.TestCase):
         fake_time = types.SimpleNamespace(ticks_ms=lambda: 1000, ticks_diff=lambda a,b: a-b, sleep_ms=lambda _: None)
         self.sensor = Mock()
         self.sensor.calibrate.return_value = (0, 0, 1)
-        path = Path(__file__).resolve().parents[1] / 'knocker_supabase.py'
+        path = Path(__file__).resolve().parents[1] / 'window_server.py'
         spec = importlib.util.spec_from_file_location('network_playback_test', path)
         self.fw = importlib.util.module_from_spec(spec)
-        with patch.dict(sys.modules, {'time': fake_time, 'network': Mock(),
-                                     'sensor': types.SimpleNamespace(Sensor=Mock(return_value=self.sensor))}):
+        with patch.dict(sys.modules, {'time': fake_time, 'network': Mock()}):
             spec.loader.exec_module(self.fw)
 
     def test_incoming_gaps_and_strength(self):
@@ -51,7 +50,8 @@ class NetworkPlaybackTests(unittest.TestCase):
             self.assertEqual(args[1:3], ([0,300], [.3,1.5]))
             self.fw.shared['running'] = False
         knocker.play_knocks.side_effect = play
-        with patch.dict(sys.modules, {'knocker_local': knocker}), patch('builtins.print'):
+        knocker.Sensor.return_value = self.sensor
+        with patch.dict(sys.modules, {'knocker': knocker}), patch('builtins.print'):
             self.fw.capture({})
         self.assertIsNone(self.fw.shared['sensor_error'])
         self.assertEqual(self.fw.shared['receive_cursor'], 9)
