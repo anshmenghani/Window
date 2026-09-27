@@ -329,8 +329,12 @@ function WindowSection({ partner }: { partner?: Match }) {
     setTesting(true);
     setNote(null);
     try {
+      if (!status?.online) {
+        setNote({ text: 'Your window is offline. Turn it on and connect it to Wi-Fi, then try again.', bad: true });
+        return;
+      }
       await testPhysicalWindow();
-      setNote({ text: status?.online ? 'Your window should knock three times now.' : 'Sent. It will knock as soon as your window comes back online.' });
+      setNote({ text: 'Your window should knock three times now.' });
     } catch (e) {
       setNote({ text: e instanceof Error ? e.message : 'Could not reach your window.', bad: true });
     } finally {
@@ -359,7 +363,7 @@ function WindowSection({ partner }: { partner?: Match }) {
             title="Your window"
             online={!!status.online}
             detail={status.online
-              ? `Online · checked in ${timeAgo(status.last_seen ?? new Date().toISOString())}${lightCity ? ` · light showing ${lightCity} time` : ''}`
+              ? `Online · checked in ${timeAgo(status.last_seen ?? new Date().toISOString())}${lightCity ? ` · light showing ${lightCity} sky` : ''}`
               : status.last_seen
                 ? `Offline · last heard from ${timeAgo(status.last_seen)}. Check its power and Wi-Fi.`
                 : 'Not heard from yet. Turn it on and connect it to Wi-Fi.'}
