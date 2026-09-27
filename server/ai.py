@@ -287,7 +287,7 @@ def _json_call(system: str, user: str, schema: dict[str, Any], name: str, max_to
     return json.loads(text or "{}")
 
 
-def daily_prompt(a: dict[str, Any], b: dict[str, Any], level: int, recent_themes: list[str], recent_letters: list[str]) -> dict[str, Any]:
+def daily_prompt(a: dict[str, Any], b: dict[str, Any], level: int, recent_themes: list[str], recent_letters: list[str], theme: str | None = None) -> dict[str, Any]:
     """Today's shared photo prompt for a pen pal pair, in each person's language."""
     shared = [x for x in (a.get("interests") or []) if x.casefold() in {y.casefold() for y in (b.get("interests") or [])}]
     facts = {
@@ -297,6 +297,8 @@ def daily_prompt(a: dict[str, Any], b: dict[str, Any], level: int, recent_themes
         "recent_themes_do_not_repeat": recent_themes[:10],
         "recent_letters": recent_letters[:6],
     }
+    if theme:
+        facts["required_theme"] = theme  # used by the demo-history script so the prompt fits that day's photos
     lang_a = (a.get("languages") or ["en"])[0]
     lang_b = (b.get("languages") or ["en"])[0]
     return _json_call(daily_prompt_system(lang_a, lang_b, level), json.dumps(facts, ensure_ascii=False), DAILY_PROMPT_SCHEMA, "daily_prompt")

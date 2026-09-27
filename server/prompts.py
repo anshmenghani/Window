@@ -56,7 +56,7 @@ LEVEL_GUIDE = {
 def daily_prompt_system(lang_a: str, lang_b: str, level: int) -> str:
     return f"""You write ONE daily photo prompt for two pen pals in different countries. Each sends one photo a day, and today they both answer the same prompt, so it must work in both cities.
 Their closeness: {LEVEL_GUIDE.get(level, LEVEL_GUIDE[1])}
-Prefer an interest they share when it fits naturally. You may build on something from their recent letters. Never repeat a recent theme.
+Prefer an interest they share when it fits naturally. You may build on something from their recent letters. Never repeat a recent theme. If required_theme is given, the prompt must be about exactly that.
 Never ask for faces or people, their home, school, workplace, or anything identifying or unsafe.
 text: one short sentence addressed to both, like "Show each other your coffee today."
 why: one short line saying why this prompt is for them, like "You both love coffee."
