@@ -349,14 +349,19 @@ declare
   v_me uuid := auth.uid();
   v_pair text;
   v_side text;
+  v_last_seen timestamptz;
 begin
   if v_me is null then
     raise exception 'Sign in to test your window.';
   end if;
-  select pair_id, side into v_pair, v_side from public.window_sides where user_id = v_me
+  select pair_id, side, last_seen_at into v_pair, v_side, v_last_seen
+  from public.window_sides where user_id = v_me
   order by last_seen_at desc nulls last limit 1;
   if v_pair is null then
     raise exception 'No physical window is linked to your account yet.';
+  end if;
+  if v_last_seen is null or v_last_seen <= now() - interval '75 seconds' then
+    raise exception 'Your physical window is offline. Turn it on and connect it to Wi-Fi, then try again.';
   end if;
 
   perform set_config('window_bridge.test_knock', 'on', true);

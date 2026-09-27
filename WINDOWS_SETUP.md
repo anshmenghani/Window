@@ -17,7 +17,7 @@ inside the database.
                ▲         (converts the rhythm,      ▲
                │          checks they're pen pals)  │
  Sid's window (Pico, side A) ─────────────────── Isha's window (Pico, side B)
-   accelerometer · servo · RGB light showing the partner's time of day
+   accelerometer · servo · RGB light showing the partner's seasonal sky
 ```
 
 What happens once it's set up:
@@ -26,7 +26,7 @@ What happens once it's set up:
 |---|---|
 | Knock on Sid's wooden window | Isha's servo knocks the same rhythm **and** Isha's phone shows "Sid knocked · on the window in Atlanta" (the crane on her sill hops and Sid's window on her sill rattles) |
 | Knock back on Isha's wooden window | Sid's servo knocks it, and Sid's phone shows the banner |
-| Isha changes her city in the app | Sid's window light follows her new time zone |
+| Isha changes her city in the app | Sid's window light follows the real sunrise/sunset/twilight for her new location and the current season |
 | Pause the pen pals in the You tab | The windows stop knocking each other (and the app), until you resume |
 
 ## Setup (about 15 minutes)
@@ -38,7 +38,7 @@ Supabase → **SQL Editor → New query**, paste, **Run**. All six are safe to r
 2. `hardware/supabase/schema.sql` (the hardware tables)
 3. `supabase/window_bridge.sql` (the connection)
 4. `supabase/pico.sql` (retry-safe Pico sending)
-5. `supabase/pico_time_light.sql` (partner time for the RGB LED)
+5. `supabase/pico_time_light.sql` (partner time + location for seasonal RGB sky)
 6. `supabase/pico_playback.sql` (servo playback and impact strength)
 
 On a Mac you can copy each file with, for example:
@@ -85,8 +85,8 @@ Picos.
 ### 6. Check it works
 In the app: **You tab → Your window.** It shows whether your window and your pen pal's are online
 (a lit lamp means the window checked in within the last minute; each Pico checks in every 30 s),
-which time zone your light is showing, and a **Knock on my window** button that makes *your own*
-window knock three times (it doesn't reach your pen pal). Then:
+which partner sky your light is showing, and a **Knock on my window** button that makes *your own*
+window knock three times while it is online (it doesn't reach your pen pal). Then:
 
 1. Knock on window A → window B's servo replays it, and Isha's phone shows the knock banner.
 2. Knock on window B → window A's servo replays it, and Sid's phone shows the banner.
@@ -104,7 +104,7 @@ window knock three times (it doesn't reach your pen pal). Then:
 |---|---|
 | Pico says the event was not delivered | The two linked accounts are paused or no longer pen pals, so the knock was dropped on purpose |
 | A Pico triggers the other Pico but nothing shows in the app | The pair isn't linked (step 4), or the usernames were wrong |
-| Window light stays on UTC colors | Not linked yet, or that person hasn't finished onboarding (no time zone) |
+| Window light looks like the fallback clock palette | The partner profile is missing usable latitude/longitude; finish onboarding or update the city so seasonal solar light can be calculated |
 | `Invalid pair credentials` | `pair_id` / `pair_secret` in `config.json` don't match what `create-pair` printed |
 | `HTTP 401` from the Pico | Wrong key in `supabase_publishable_key` |
 | You tab says "Offline" | The Pico is off, has no Wi-Fi, or its firmware isn't running (it checks in every 30 s) |
