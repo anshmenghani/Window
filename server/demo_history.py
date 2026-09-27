@@ -137,7 +137,9 @@ def main_cli() -> None:
         print("\nNothing changed. Run again with --yes to replace the pair's letters with this history.")
         return
 
-    # the original roles while loading; restored in the finally below, even if something fails
+    # the original roles while loading; restored in the finally below, even if something fails.
+    # A copy of the current roles is also written next to letters.json, just in case.
+    (folder / "roles-before-last-run.json").write_text(json.dumps(saved, indent=2, ensure_ascii=False))
     for name, user_id in ids.items():
         sb.table("profiles").update(ORIGINAL_ROLES[name]).eq("id", user_id).execute()
     try:
@@ -145,7 +147,8 @@ def main_cli() -> None:
     finally:
         for name, user_id in ids.items():
             sb.table("profiles").update(saved[name]).eq("id", user_id).execute()
-        print("  profiles put back to how they were")
+        now = {name: main.profile(user_id).get("home_city") for name, user_id in ids.items()}
+        print(f"  profiles put back: sid lives in {now.get('sid')}, isha lives in {now.get('isha')}")
 
 
 def load(sb: Any, ids: dict[str, str], people: dict[str, dict[str, Any]], match: dict[str, Any], letters: list[dict[str, Any]], folder: Path) -> None:
