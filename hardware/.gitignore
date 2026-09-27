@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
 .venv/
-pi/config.json
-pi/window_state.json
+pico/config.json
+pico/tls_pin.json
 .DS_Store
