@@ -46,6 +46,11 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from dotenv import load_dotenv
+
+# server/.env wins over anything already set in the terminal (e.g. an old key exported in ~/.zshrc)
+load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
+
 import main
 import ai
 from db import get_supabase
