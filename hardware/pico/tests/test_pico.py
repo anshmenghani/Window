@@ -97,7 +97,7 @@ class UploadLoopTests(unittest.TestCase):
             spec.loader.exec_module(firmware)
         api = Mock()
         api.send.side_effect = send_results
-        api.heartbeat.return_value = {'timezone': 'UTC', 'local_hour': 7.5}
+        api.heartbeat.return_value = {'timezone': 'UTC', 'local_hour': 7.5, 'server_epoch': 1774008000, 'latitude': 33.75, 'longitude': -84.39}
         api.receive.return_value = {'cursor': 8 if incoming else 0, 'events': [incoming] if incoming else []}
         entry = {'id': 'b' * 32, 'pattern': [0, 400], 'impacts': [0.3, 1.5], 'created': 5000 - age}
         firmware.shared['queue'].append(entry)
@@ -125,7 +125,16 @@ class UploadLoopTests(unittest.TestCase):
         self.assertFalse(firmware.shared['running'])
         wlan.disconnect.assert_called_once()
         api.heartbeat.assert_called_once_with(include_time=light_enabled)
-        self.assertEqual(firmware.shared['partner_clock'], (7.5, 5000) if light_enabled else None)
+        self.assertEqual(
+            firmware.shared['partner_clock'],
+            {
+                'local_hour': 7.5,
+                'server_epoch': 1774008000,
+                'latitude': 33.75,
+                'longitude': -84.39,
+                'received_at': 5000,
+            } if light_enabled else None,
+        )
         if incoming:
             self.assertEqual(firmware.shared['receive_cursor'], 7)
             self.assertEqual(firmware.shared['incoming'], {'id': 8, 'offsets': [0,300,1000], 'impacts_g': [.3,.8,1.5]})
