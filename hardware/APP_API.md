@@ -1,6 +1,6 @@
 # App API — Supabase RPC
 
-Both the app and Raspberry Pis call Supabase's Data API.
+Both the app and Pico Ws call Supabase's Data API.
 
 Raw HTTP format:
 
