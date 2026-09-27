@@ -122,7 +122,6 @@ Pico W.
 - `server/` is the AI server ([`server/README.md`](server/README.md))
 - `supabase/` has the database setup, the window bridge, the Pico additions, and demo helpers
 - `hardware/pico/` is the firmware for the wooden windows
-- [`BACKEND_SPEC.md`](BACKEND_SPEC.md) describes how the app and backend talk, with a running changelog
 
 ## Setting it up yourself
 
