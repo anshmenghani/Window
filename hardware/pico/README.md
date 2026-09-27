@@ -10,7 +10,7 @@ Supabase communication; importing `knocker.py` does not start local mode.
 | Servo timing, swing and direction | GP28, reversed swing | Same playback function |
 | Playback source | Your just-recorded rhythm | Partner's received rhythm |
 | Ignore sensor during playback/settling | Yes | Yes |
-| RGB colors | Configurable local starting time | Partner's server-provided time |
+| RGB colors | Configurable local starting time | Partner's real seasonal sky from server time + profile location |
 | LED pins/polarity | GP11 red, GP12 green, GP13 blue; common anode | Same defaults |
 | Sensor | SDA GP18, SCL GP19 | Same defaults |
 
@@ -88,9 +88,7 @@ Then test B to A. The app's hardware test works while the linked match is active
   gaps shorter than its 240 ms strike/retract cycle. Legacy faster rhythms play
   as quickly as the servo cycle allows. Current defaults record taps at least
   250 ms apart.
-- The RGB light uses the partner's time in Supabase mode; local mode uses
-  `LOCAL_START_HOUR`. Both use the same color curve and independent PIO outputs,
-  so GP12/GP13 do not interfere with the servo's hardware PWM channel.
+- In Supabase mode the RGB light uses the server timestamp plus the partner profile's latitude/longitude to calculate solar elevation, so sunrise, sunset and twilight move with the date and latitude. If coordinates are missing it safely falls back to the partner's local-clock palette. Local mode still uses `LOCAL_START_HOUR`. Independent PIO outputs keep GP12/GP13 from interfering with the servo's hardware PWM channel.
 
 Desktop verification: `python3 -m unittest discover -s hardware/pico/tests -v`.
 Run `tests/playback.sql` in a test Supabase project for transactional integration
