@@ -1,0 +1,13 @@
+{
+  "wifi_ssid": "YOUR_PHONE_HOTSPOT",
+  "wifi_password": "YOUR_HOTSPOT_PASSWORD",
+  "supabase_url": "https://YOUR_PROJECT.supabase.co",
+  "supabase_publishable_key": "sb_publishable_REPLACE_ME",
+  "pair_id": "REPLACE_ME",
+  "pair_secret": "REPLACE_ME",
+  "side": "A",
+  "sensor": {"sda": 6, "scl": 7, "frequency": 50000},
+  "detection": {"threshold_g": 0.25, "cooldown_ms": 300, "sequence_gap_ms": 900, "max_knocks": 12},
+  "retry_ms": 3000,
+  "queue_ttl_ms": 60000
+}

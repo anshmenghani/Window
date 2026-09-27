@@ -1,5 +1,12 @@
 # Connecting the physical windows to the app
 
+**Pico W update:** For the current MMA845x/Pico W hardware, follow
+[hardware/pico/README.md](hardware/pico/README.md). It adds `supabase/pico.sql`
+after the three migrations below and replaces the Linux Pi daemon with
+MicroPython firmware. Pico firmware currently uploads knocks and reports
+presence only; servo playback is deferred. The remaining instructions describe
+the older Linux Pi devices and their buzzer/RGB outputs.
+
 The two Raspberry Pi windows (Ansh's `window_sync_supabase_project`) and the Window app share
 **one** Supabase project: the app's. A small SQL file, `supabase/window_bridge.sql`, connects them
 inside the database. The Pi code and the app code don't need any changes.

@@ -13,6 +13,9 @@ FastAPI service for matching, processing windows, itinerary generation, and data
 
 Deploy this directory as a Render web service. Build: `pip install -r requirements.txt`. Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`. Configure the environment variables from `env.example` in Render. Add Database Webhooks for `knocks` INSERT and `window_translations` UPDATE to `/hooks/push`, with `x-hook-secret` set to the same `HOOK_SECRET` value.
 
+Pico W knock uploads go directly to Supabase, not to FastAPI. See
+`../hardware/pico/README.md` for firmware and the additional retry-safe SQL migration.
+
 For the Expo app, copy `app/env.example` to `app/.env` and fill in the public Supabase URL, anon key, and deployed API URL. An EAS project id is still needed for device push tokens; add it through your Expo account in `app/app.json` before expecting `registerPushToken` to store a token.
 
 ## Demo personas

@@ -1,5 +1,8 @@
 # Window Sync — Supabase + Raspberry Pi
 
+**Using a Pico W with the MMA845x sensor? Start with [pico/README.md](pico/README.md).**
+The `pi/` instructions below target Linux Raspberry Pis, not Pico microcontrollers.
+
 This is the Supabase version of the paired physical Window project.
 
 ## What it does
